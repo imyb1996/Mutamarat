@@ -194,19 +194,25 @@ body{font-family:'Tajawal',sans-serif;background:linear-gradient(135deg,var(--bg
 /* ============ DATA TABLE ============ */
 .d-tbl-wrap{overflow-x:auto;padding:0}
 .d-tbl{width:100%;border-collapse:collapse;font-size:13px}
-.d-tbl thead th{background:var(--header-bg);border-bottom:2px solid var(--border);padding:10px 8px;text-align:center;font-weight:700;color:var(--text-mid);font-size:12px;position:sticky;top:48px;z-index:3}
+.d-tbl thead th{background:var(--header-bg);border-bottom:2px solid var(--border);padding:10px 8px;text-align:center;font-weight:700;color:var(--text-mid);font-size:12px}
 .d-tbl tbody td{border-bottom:1px solid var(--border-light);padding:8px;text-align:center;color:var(--text);vertical-align:middle}
 .d-tbl tbody tr:nth-child(even) td{background:var(--row-alt)}
+.track-sect .d-tbl tbody tr:nth-child(even) td{background:#fff}
+.track-sect .d-tbl tbody tr:nth-child(even) td.sub-row{background:#E2E8F0!important}
+.track-sect .d-tbl tbody tr:nth-child(even) td.total-row{background:#CBD5E0!important}
 .d-tbl tbody tr:hover td{background:#EBF4FF}
-.d-tbl tfoot td{background:var(--header-bg);border-top:2px solid var(--border);padding:10px 8px;font-weight:800;color:var(--navy);font-size:13px;text-align:center}
+.d-tbl tfoot td{background:var(--navy)!important;border-top:2px solid var(--border);padding:10px 8px;font-weight:800;color:#fff!important;font-size:13px;text-align:center}
+.d-tbl tfoot td.money-paid,.d-tbl tfoot td .money-paid{color:#A7F3B5!important}
+.d-tbl tfoot td.money-pending,.d-tbl tfoot td .money-pending{color:#FFC79A!important}
+.d-tbl tfoot td.money{color:#fff!important}
 .d-tbl .num{font-family:'Tajawal',sans-serif;font-weight:600;font-variant-numeric:tabular-nums;direction:ltr}
 .d-tbl .money{font-family:'Tajawal',sans-serif;font-weight:700;font-variant-numeric:tabular-nums;direction:ltr;color:var(--navy)}
 .d-tbl .money-paid{color:#2E7D32}
 .d-tbl .money-pending{color:#C05621}
 .d-tbl .nm-cell{text-align:right;font-weight:500}
 .d-tbl .code-cell{font-weight:800;color:var(--navy);font-size:12px}
-.d-tbl td.total-row,.d-tbl th.total-row{background:#EDF2F7!important;font-weight:800}
-.d-tbl td.sub-row{background:#F8FAFC!important;font-weight:700}
+.d-tbl td.total-row,.d-tbl th.total-row{background:#CBD5E0!important;color:var(--navy)!important;font-weight:800}
+.d-tbl td.sub-row{background:#E2E8F0!important;color:var(--navy)!important;font-weight:700}
 
 /* Tracking report sub-sections: only active shown on screen; all 3 on print */
 .track-sect{display:none}
@@ -276,7 +282,13 @@ body{font-family:'Tajawal',sans-serif;background:linear-gradient(135deg,var(--bg
   tr{page-break-inside:avoid}
   thead{display:table-header-group}
   tfoot{display:table-footer-group}
-  .mx-tbl thead th{position:static!important;top:auto!important}
+  .mx-tbl thead th,.d-tbl thead th{position:static!important;top:auto!important}
+  .d-tbl tfoot{display:table-row-group!important}
+  .d-tbl tfoot td{background:#2B4C7E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .d-tbl tfoot td.money-paid{color:#A7F3B5!important}
+  .d-tbl tfoot td.money-pending{color:#FFC79A!important}
+  .d-tbl td.total-row{background:#CBD5E0!important;color:#1A365D!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .d-tbl td.sub-row{background:#E2E8F0!important;color:#1A365D!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .mx-tbl.mx-wide{width:100%;table-layout:fixed}
   .mx-tbl.mx-wide th,.mx-tbl.mx-wide td{width:auto!important}
   .mx-tbl.mx-narrow{width:auto;margin:0 auto}
@@ -304,6 +316,7 @@ var curView='gantt';                     /* gantt | matrix | due | tracking */
 var dueMode=1;                           /* 1 = exclude مستحق, 2 = include */
 var trackSubView='bld';                  /* bld | mon | det */
 var trackYearFrom=null,trackYearTo=null; /* year range for tracking */
+var trackDefaultsApplied=false;          /* force defaults on first tracking view per page load */
 var matYearFrom=null,matYearTo=null;     /* year range for matrix */
 var matOnlyLink=true;                    /* matrix: show only contracts with link */
 var APPROACHING_DAYS=30;                 /* days threshold for اقترب الميعاد */
@@ -677,7 +690,18 @@ function renderTracking(){
 
   var allYrs=getAllYears();
   if(!allYrs.length){document.getElementById("app").innerHTML=h+'<div class="rpt-wrap"><div class="rpt-card"><div class="empty-state">لا توجد بيانات</div></div></div>';return;}
+  var _curYr=new Date().getFullYear();
+  // Ensure current year is selectable in the dropdown
+  if(allYrs.indexOf(_curYr)<0){allYrs.push(_curYr);allYrs.sort(function(a,b){return a-b;});}
+  // Default: from current year → to last recorded year (forced on first visit per page load)
+  if(!trackDefaultsApplied){
+    trackYearFrom=_curYr;
+    trackYearTo=allYrs[allYrs.length-1];
+    trackDefaultsApplied=true;
+  }
   if(trackYearFrom<allYrs[0])trackYearFrom=allYrs[0];
+  if(trackYearFrom>allYrs[allYrs.length-1])trackYearFrom=allYrs[allYrs.length-1];
+  if(trackYearTo<allYrs[0])trackYearTo=allYrs[0];
   if(trackYearTo>allYrs[allYrs.length-1])trackYearTo=allYrs[allYrs.length-1];
   if(trackYearFrom>trackYearTo)trackYearFrom=trackYearTo;
 
