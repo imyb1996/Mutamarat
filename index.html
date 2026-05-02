@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>مخطط إيجارات الشقق — Gantt Chart</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#1A365D;--navy2:#2B4C7E;--bg:#F5F6FA;--card:#FFF;
+  --border:#E2E8F0;--border-light:#EDF2F7;--text:#2D3748;--text-mid:#4A5568;--text-light:#718096;--text-muted:#A0AEC0;
+  --accent-blue:#2196F3;--accent-green:#4CAF50;--accent-orange:#FF9800;
+  --row-alt:#F8FAFC;--header-bg:#F7FAFC;
+  --red:#E53E3E;--red-light:#FED7D7;--red-bg:#FFF5F5;
+  --clr-yearly:#93C5FD;--clr-yearly-dark:#3B82F6;
+  --clr-monthly:#FDBA74;--clr-monthly-dark:#F97316;
+  --clr-other:#D1D5DB;--clr-other-dark:#6B7280;
+  --clr-leave:#FCA5A5;--clr-leave-dark:#EF4444;
+  --badge-bg:#374151;--badge-text:#F9FAFB;--badge-empty-bg:#E5E7EB;--badge-empty-text:#9CA3AF;
+  --grid-color:#CBD5E0;--grid-width:1.5px;
+  --label-w:82px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Tajawal',sans-serif;background:linear-gradient(135deg,var(--bg),#EEF1F8);color:var(--text);min-height:100vh}
+::-webkit-scrollbar{height:8px;width:8px}
+::-webkit-scrollbar-track{background:#EEF0F5;border-radius:4px}
+::-webkit-scrollbar-thumb{background:#B0B8C9;border-radius:4px}
+
+@media print{
+  body{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .no-print{display:none!important}
+  .header-print{display:block!important}
+  .chart-wrap{box-shadow:none!important;overflow:visible!important}
+  .stat-card{box-shadow:none!important;border:1px solid #ddd}
+  .sticky-clone{display:none!important}
+  /* ★ Page size injected dynamically per view (landscape for gantt, portrait for reports) */
+  @page{margin:8mm;
+    @bottom-center{content:"صفحة " counter(page) " من " counter(pages);font-family:'Tajawal',sans-serif;font-size:10pt;color:#718096}
+  }
+}
+.header-print{display:none}
+
+.header{background:linear-gradient(135deg,var(--navy),var(--navy2) 50%,var(--navy));padding:18px 28px;color:#fff}
+.header-inner{max-width:1300px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.header h1{font-size:22px;font-weight:800;letter-spacing:-.5px}
+.header p{font-size:13px;opacity:.8;margin-top:3px;font-weight:300}
+.header-btns{display:flex;gap:8px;flex-wrap:wrap}
+.action-btn{padding:8px 20px;background:rgba(255,255,255,.13);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:8px;cursor:pointer;font:500 13px 'Tajawal',sans-serif;transition:background .2s;white-space:nowrap}
+.action-btn:hover{background:rgba(255,255,255,.22)}
+
+.header-print{padding:16px 28px 14px;border-bottom:3px solid var(--navy);margin-bottom:10px;text-align:center}
+.hp-title{font-size:20px;font-weight:800;color:var(--navy);margin:0}
+.hp-sub{font-size:12px;color:var(--text-light);margin-top:2px}
+.hp-year{display:inline-block;margin-top:8px;font-size:28px;font-weight:800;color:var(--navy);background:var(--header-bg);border:2.5px solid var(--navy);border-radius:10px;padding:3px 28px;letter-spacing:2px}
+
+.share-toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--navy);color:#fff;padding:12px 24px;border-radius:10px;font:600 14px 'Tajawal';box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:2000;transition:transform .3s ease,opacity .3s ease;opacity:0;pointer-events:none}
+.share-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+
+.legend-row{max-width:1300px;margin:10px auto 0;padding:0 28px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--text-mid)}
+.legend-item{display:flex;align-items:center;gap:5px}
+.legend-swatch{width:22px;height:12px;border-radius:3px;border:1px solid rgba(0,0,0,.1)}
+
+.overlap-banner{max-width:1300px;margin:10px auto 0;padding:0 28px}
+.overlap-banner-inner{background:var(--red-bg);border:1.5px solid var(--red-light);border-radius:10px;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ob-icon{font-size:22px}.ob-title{font-size:14px;font-weight:700;color:var(--red)}.ob-list{font-size:12px;color:#C53030;font-weight:500}
+
+.controls{max-width:1300px;margin:16px auto 0;padding:0 28px;display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end}
+.ctrl-group{display:flex;flex-direction:column;gap:4px}
+.ctrl-label{font-size:12px;font-weight:600;color:var(--text-mid)}
+.year-sel{display:flex;align-items:center;border:1.5px solid #CBD5E0;border-radius:8px;overflow:hidden;background:var(--card)}
+.year-arrow{width:36px;height:38px;border:none;background:#EDF2F7;cursor:pointer;font-size:13px;color:var(--text-mid);font-family:'Tajawal';transition:background .15s;position:relative}
+.year-arrow:hover{background:#E2E8F0}
+.year-arrow .arrow-tip{display:none;position:absolute;bottom:-28px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;font-size:10px;padding:3px 8px;border-radius:5px;white-space:nowrap;z-index:20;font-weight:600}
+.year-arrow:hover .arrow-tip{display:block}
+.year-sel select{border:none;padding:6px 18px;font:700 15px 'Tajawal';color:var(--navy);text-align:center;outline:none;background:transparent;cursor:pointer;appearance:none;min-width:72px}
+.bld-select{padding:7px 14px;border:1.5px solid #CBD5E0;border-radius:8px;font:400 14px 'Tajawal';color:var(--text);background:var(--card);cursor:pointer;outline:none;min-width:130px}
+
+/* ★ Zoom buttons */
+.zoom-btns{display:flex;border:1.5px solid #CBD5E0;border-radius:8px;overflow:hidden;background:var(--card)}
+.zoom-btn{padding:6px 14px;border:none;background:transparent;cursor:pointer;font:600 12px 'Tajawal';color:var(--text-mid);transition:background .15s;border-left:1px solid #CBD5E0}
+.zoom-btn:first-child{border-left:none}
+.zoom-btn:hover{background:#EDF2F7}
+.zoom-btn.active{background:var(--navy);color:#fff}
+
+.stats-row{max-width:1300px;margin:14px auto;padding:0 28px;display:flex;gap:12px;flex-wrap:wrap}
+.stat-card{flex:1 1 140px;background:var(--card);border-radius:10px;padding:12px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:transform .15s}
+.stat-card:hover{transform:translateY(-2px)}
+.stat-val{font-size:20px;font-weight:800;color:var(--navy)}
+.stat-val .stat-total{font-size:13px;font-weight:500;color:var(--text-muted)}
+.stat-lbl{font-size:11px;color:var(--text-light);font-weight:500;margin-top:2px}
+.stat-sub{font-size:10.5px;color:var(--text-muted);margin-top:5px;line-height:1.7}
+.stat-sub b{color:var(--text-mid);font-weight:600}
+.stat-sub .s-red{color:var(--red);font-weight:600}
+
+.chart-container{max-width:1300px;margin:14px auto;padding:0 28px}
+.chart-wrap{background:var(--card);border-radius:12px;box-shadow:0 2px 14px rgba(0,0,0,.06);overflow-x:auto;position:relative}
+.chart-inner{transition:min-width .3s ease}
+.g-table{width:100%;border-collapse:collapse}
+.g-table thead th{background:var(--header-bg);border-bottom:2px solid var(--border);border-left:var(--grid-width) solid var(--grid-color);padding:7px 0;text-align:center;font-size:12px;font-weight:600;color:var(--text-mid);vertical-align:middle}
+.g-table thead th .en{font-size:10px;color:var(--text-muted);font-weight:400}
+
+/* ★ Sticky first column */
+.g-table thead th.label-th,
+.g-table .label-td,
+.g-table tfoot td:first-child{
+  width:var(--label-w);min-width:var(--label-w);
+  position:sticky;right:0;z-index:6;
+  background:var(--header-bg);
+}
+.g-table thead th.label-th{font-size:11px;font-weight:700;z-index:12}
+.g-table .label-td{border-left:var(--grid-width) solid var(--grid-color);text-align:center;padding:6px 4px;box-shadow:-2px 0 4px rgba(0,0,0,.05)}
+.g-table tfoot td{background:var(--header-bg);border-top:2px solid var(--border);border-left:var(--grid-width) solid var(--grid-color);text-align:center;font-size:10px;color:var(--text-muted);padding:5px 0}
+.g-row td{border-bottom:1px solid var(--border-light);padding:0;vertical-align:middle}
+.g-row:nth-child(even) td{background:var(--row-alt)}
+.g-row:nth-child(even) .label-td{background:var(--row-alt)}
+.g-row:nth-child(odd) .label-td{background:#fff}
+
+.apt-badge{font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;white-space:nowrap;display:inline-block;background:var(--badge-bg);color:var(--badge-text)}
+.apt-badge.empty{background:var(--badge-empty-bg);color:var(--badge-empty-text)}
+.label-icons{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:3px;font-size:10px}
+.overlap-warn{color:#D97706;cursor:help}
+.leave-warn{color:var(--red);cursor:help}
+.bars-td{position:relative;padding:0!important}
+.bars-wrap{position:absolute;inset:0}
+.grid-line{position:absolute;top:0;bottom:0;width:var(--grid-width);background:var(--grid-color);pointer-events:none}
+/* ★ Today line always full opacity */
+.today-line{position:absolute;top:0;bottom:0;width:2.5px;background:var(--red);z-index:8;pointer-events:none;opacity:1!important}
+.today-label{position:absolute;top:2px;font-size:8px;font-weight:700;color:#fff;background:var(--red);padding:1px 5px;border-radius:3px;white-space:nowrap;transform:translateX(50%)}
+.gantt-bar{position:absolute;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:visible;transition:filter .15s,transform .15s;z-index:2}
+.gantt-bar:hover{filter:brightness(1.08) saturate(1.2);transform:scaleY(1.12);box-shadow:0 3px 10px rgba(0,0,0,.22);z-index:5}
+.bar-inner{position:absolute;inset:0;border-radius:5px;overflow:hidden;display:flex;align-items:center;justify-content:center;border:1.5px solid rgba(0,0,0,.08)}
+.bar-text{font-size:10px;font-weight:700;white-space:nowrap;padding:0 5px;pointer-events:none;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.leave-marker{position:absolute;top:-2px;bottom:-2px;width:5px;background:repeating-linear-gradient(45deg,var(--red),var(--red) 2px,#fff 2px,#fff 4px);border-radius:3px 0 0 3px;pointer-events:none;z-index:3;left:-2px}
+.leave-tag{position:absolute;top:-14px;left:0;font-size:7.5px;font-weight:700;color:#fff;background:var(--red);padding:1px 4px;border-radius:3px;white-space:nowrap;pointer-events:none;z-index:4}
+
+.sticky-clone{position:fixed;top:48px;z-index:45;background:var(--header-bg);border-bottom:2px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.12);display:none;overflow:hidden;pointer-events:none}
+.sticky-clone table{border-collapse:collapse}
+.sticky-clone th{background:var(--header-bg);border-left:var(--grid-width) solid var(--grid-color);padding:7px 0;text-align:center;font-size:12px;font-weight:600;color:var(--text-mid)}
+.sticky-clone th .en{font-size:10px;color:var(--text-muted);font-weight:400}
+
+.tooltip-overlay{position:fixed;inset:0;z-index:999}
+.tooltip-card{position:fixed;background:var(--card);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.05);width:280px;overflow:hidden;z-index:1000;animation:tipIn .2s ease}
+@keyframes tipIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.tip-close{position:absolute;top:8px;left:10px;cursor:pointer;font-size:15px;color:#fff;opacity:.8;z-index:1;background:none;border:none}.tip-close:hover{opacity:1}
+.tip-head{background:linear-gradient(135deg,var(--navy),var(--navy2));padding:13px 16px;display:flex;justify-content:space-between;align-items:center}
+.tip-badge{color:#fff;padding:3px 11px;border-radius:6px;font-size:14px;font-weight:800}
+.tip-amount{color:#FFD54F;font-size:15px;font-weight:700}
+.tip-body{padding:10px 16px}
+.tip-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F0F0F0;font-size:13px}.tip-row:last-child{border-bottom:none}
+.tip-lbl{color:var(--text-light);font-weight:500}
+.tip-val{color:var(--text);font-weight:600;text-align:left;max-width:58%;word-break:break-word}
+.tip-row-red{background:var(--red-bg);border-radius:6px;margin:4px -6px;padding:6px!important}
+.tip-row-red .tip-lbl{color:var(--red);font-weight:700}.tip-row-red .tip-val{color:var(--red);font-weight:800}
+
+.empty-state{padding:50px 20px;text-align:center;color:var(--text-muted);font-size:16px}
+.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh}
+.spinner{width:42px;height:42px;border:4px solid var(--border);border-top-color:var(--accent-blue);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{margin-top:16px;color:var(--text-mid);font-size:16px}
+.error-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px}
+.error-screen .icon{font-size:50px}.error-screen h3{font-size:20px;color:var(--red);margin-top:12px}.error-screen p{font-size:14px;color:var(--text-light);margin-top:8px;max-width:420px}
+.retry-btn{margin-top:16px;padding:10px 28px;background:var(--accent-blue);color:#fff;border:none;border-radius:8px;cursor:pointer;font:600 14px 'Tajawal';transition:background .2s}.retry-btn:hover{background:#1976D2}
+.footer{max-width:1300px;margin:14px auto;padding:12px 28px;text-align:center;color:var(--text-muted);font-size:12px}
+
+/* ============ TABS NAV ============ */
+.tabs-row{background:#fff;border-bottom:1px solid var(--border);padding:0 28px;position:sticky;top:0;z-index:50;box-shadow:0 2px 6px rgba(0,0,0,.04)}
+.tabs-inner{max-width:1300px;margin:0 auto;display:flex;gap:4px;overflow-x:auto}
+.tab-btn{padding:12px 18px;background:none;border:none;border-bottom:3px solid transparent;cursor:pointer;font:600 13px 'Tajawal';color:var(--text-light);white-space:nowrap;transition:all .15s;display:flex;align-items:center;gap:6px}
+.tab-btn:hover{color:var(--navy);background:var(--row-alt)}
+.tab-btn.active{color:var(--navy);border-bottom-color:var(--navy);font-weight:800}
+.tab-icon{font-size:15px}
+@media print{.tabs-row{display:none!important}}
+
+/* ============ REPORT CONTAINERS ============ */
+.rpt-wrap{max-width:1300px;margin:18px auto;padding:0 28px}
+.rpt-card{background:var(--card);border-radius:12px;box-shadow:0 2px 14px rgba(0,0,0,.06);overflow:hidden}
+.rpt-head{padding:18px 22px;border-bottom:2px solid var(--border-light);background:linear-gradient(135deg,#F8FAFC,#fff);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.rpt-title{font-size:18px;font-weight:800;color:var(--navy);display:flex;align-items:center;gap:8px}
+.rpt-sub{font-size:12px;color:var(--text-light);margin-top:2px;font-weight:400}
+
+/* ============ CONTROLS ROW ============ */
+.rpt-ctrls{padding:14px 22px;background:var(--row-alt);border-bottom:1px solid var(--border-light);display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}
+.rpt-ctrl{display:flex;flex-direction:column;gap:4px}
+.rpt-ctrl label{font-size:11px;font-weight:700;color:var(--text-mid)}
+.rpt-ctrl select,.rpt-ctrl input{padding:7px 12px;border:1.5px solid #CBD5E0;border-radius:8px;font:500 13px 'Tajawal';color:var(--text);background:#fff;outline:none;min-width:130px;cursor:pointer}
+.rpt-ctrl select:focus,.rpt-ctrl input:focus{border-color:var(--accent-blue)}
+.seg-btns{display:flex;border:1.5px solid #CBD5E0;border-radius:8px;overflow:hidden;background:#fff}
+.seg-btn{padding:7px 14px;border:none;background:transparent;cursor:pointer;font:600 12px 'Tajawal';color:var(--text-mid);border-left:1px solid #CBD5E0;white-space:nowrap}
+.seg-btn:first-child{border-left:none}
+.seg-btn:hover{background:var(--header-bg)}
+.seg-btn.active{background:var(--navy);color:#fff}
+
+/* ============ DATA TABLE ============ */
+.d-tbl-wrap{overflow-x:auto;padding:0}
+.d-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.d-tbl thead th{background:var(--header-bg);border-bottom:2px solid var(--border);padding:10px 8px;text-align:center;font-weight:700;color:var(--text-mid);font-size:12px;position:sticky;top:48px;z-index:3}
+.d-tbl tbody td{border-bottom:1px solid var(--border-light);padding:8px;text-align:center;color:var(--text);vertical-align:middle}
+.d-tbl tbody tr:nth-child(even) td{background:var(--row-alt)}
+.d-tbl tbody tr:hover td{background:#EBF4FF}
+.d-tbl tfoot td{background:var(--header-bg);border-top:2px solid var(--border);padding:10px 8px;font-weight:800;color:var(--navy);font-size:13px;text-align:center}
+.d-tbl .num{font-family:'Tajawal',sans-serif;font-weight:600;font-variant-numeric:tabular-nums;direction:ltr}
+.d-tbl .money{font-family:'Tajawal',sans-serif;font-weight:700;font-variant-numeric:tabular-nums;direction:ltr;color:var(--navy)}
+.d-tbl .money-paid{color:#2E7D32}
+.d-tbl .money-pending{color:#C05621}
+.d-tbl .nm-cell{text-align:right;font-weight:500}
+.d-tbl .code-cell{font-weight:800;color:var(--navy);font-size:12px}
+.d-tbl td.total-row,.d-tbl th.total-row{background:#EDF2F7!important;font-weight:800}
+.d-tbl td.sub-row{background:#F8FAFC!important;font-weight:700}
+
+/* Tracking report sub-sections: only active shown on screen; all 3 on print */
+.track-sect{display:none}
+.track-sect.active{display:block}
+.track-sect-title{font-size:16px;font-weight:800;color:var(--navy);padding:16px 22px 10px;border-bottom:1px solid var(--border-light);background:var(--row-alt);display:none}
+@media print{
+  .track-sect{display:block!important}
+  .track-sect-title{display:block!important}
+  .track-sect+.track-sect{page-break-before:always}
+}
+
+/* Status badges */
+.st-badge{display:inline-block;padding:3px 9px;border-radius:6px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.st-2{background:#D1FADF;color:#027A48}   /* تم السداد */
+.st-3{background:#D1E9FF;color:#1849A9}   /* سداد بزيادة */
+.st-4{background:#EAECF0;color:#344054}   /* مستحق */
+.st-5{background:#FEF0C7;color:#B54708}   /* سداد جزء */
+.st-6{background:#FEE4E2;color:#B42318}   /* غير مسدد بالكامل */
+.st-7{background:#FFE4C7;color:#93370D}   /* جزء غير مسدد */
+.st-8{background:#E0E7FF;color:#3730A3}   /* اقترب الميعاد */
+
+/* ============ MATRIX TABLE (Report 1) ============ */
+.mx-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.mx-tbl thead th{background:var(--navy);color:#fff;padding:11px 12px;text-align:center;font-weight:700;font-size:13px;border-left:1px solid rgba(255,255,255,.15);position:sticky;top:48px;z-index:3}
+.mx-tbl thead th:last-child{border-left:none}
+.mx-tbl tbody td{border-bottom:1px solid var(--border-light);border-left:1px solid var(--border-light);padding:9px 10px;text-align:center;vertical-align:middle}
+.mx-tbl tbody td:last-child{border-left:none}
+.mx-tbl tbody tr:nth-child(even) td{background:var(--row-alt)}
+.mx-tbl tbody tr:hover td{background:#EBF4FF}
+.mx-tbl .apt-col{font-weight:800;color:var(--navy);background:var(--header-bg)!important;text-align:center;min-width:70px}
+.mx-tbl .apt-merged{background:var(--header-bg)!important}
+.mx-tbl .tenant-col{text-align:right;font-weight:500;min-width:230px;padding-right:14px!important}
+.mx-tbl tr.apt-first td{border-top:2px solid var(--border)}
+.mx-tbl tr:first-child td{border-top:none}
+.con-mark{display:inline-block;padding:4px 14px;border-radius:6px;background:linear-gradient(135deg,var(--clr-yearly),#60A5FA);color:#fff;font-weight:700;font-size:11px;box-shadow:0 1px 3px rgba(59,130,246,.3)}
+.con-link{text-decoration:none;display:inline-block;transition:transform .15s}
+.con-link:hover .con-mark{transform:translateY(-1px);box-shadow:0 3px 8px rgba(59,130,246,.45);filter:brightness(1.05)}
+.con-link:hover .con-mark::after{content:" \u2197";font-size:9px;opacity:.8}
+.con-mark-nolink{background:transparent!important;color:#94A3B8!important;border:1.5px dashed #CBD5E0;box-shadow:none!important;font-weight:600}
+@media print{.con-link .con-mark{text-decoration:underline;text-underline-offset:2px}.con-mark-nolink{color:#94A3B8!important;border-color:#CBD5E0!important}}
+
+/* ============ SUMMARY CARDS ============ */
+.sum-row{display:flex;gap:12px;padding:16px 22px;background:var(--row-alt);border-bottom:1px solid var(--border-light);flex-wrap:wrap}
+.sum-card{flex:1 1 160px;background:#fff;border-radius:10px;padding:12px 16px;border-right:4px solid var(--navy)}
+.sum-card.green{border-right-color:var(--accent-green)}
+.sum-card.orange{border-right-color:var(--accent-orange)}
+.sum-card.red{border-right-color:var(--red)}
+.sum-val{font-size:20px;font-weight:800;color:var(--navy);direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
+.sum-card.green .sum-val{color:#2E7D32}
+.sum-card.orange .sum-val{color:#C05621}
+.sum-card.red .sum-val{color:var(--red)}
+.sum-lbl{font-size:11px;color:var(--text-light);font-weight:500;margin-top:2px}
+
+/* ============ PRINT ============ */
+@media print{
+  .rpt-wrap{max-width:none;padding:0;margin:0}
+  .rpt-card{box-shadow:none;border:1px solid #ccc}
+  .rpt-ctrls{display:none!important}
+  .rpt-head{background:#fff;padding:10px 12px}
+  .d-tbl thead th,.mx-tbl thead th{background:#2B4C7E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .d-tbl,.mx-tbl{font-size:10.5px}
+  .d-tbl tbody td,.mx-tbl tbody td{padding:5px 4px}
+  .st-badge{padding:2px 6px;font-size:9.5px}
+  .con-mark{padding:3px 10px;font-size:10px}
+  .sum-row{page-break-inside:avoid}
+  .section-break{page-break-before:always}
+  tr{page-break-inside:avoid}
+  thead{display:table-header-group}
+  tfoot{display:table-footer-group}
+  .mx-tbl thead th{position:static!important;top:auto!important}
+  .mx-tbl.mx-wide{width:100%;table-layout:fixed}
+  .mx-tbl.mx-wide th,.mx-tbl.mx-wide td{width:auto!important}
+  .mx-tbl.mx-narrow{width:auto;margin:0 auto}
+}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading-screen"><div class="spinner"></div><p class="loading-text">جاري تحميل البيانات من جوجل شيت...</p></div></div>
+<div id="shareToast" class="share-toast">تم نسخ رابط المشاركة ✓</div>
+<div id="stickyHeader" class="sticky-clone"></div>
+<script>
+var MA=["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+var ME=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var SID="1HPVIpAeIwsFrmWKKQ_8XztvPDYZ1mENT_8mz3UyBA7s";
+var allC=[],allS=[],allT=[];      /* Contracts, Schedules, Transactions */
+var curY=new Date().getFullYear(),curB="all",curZoom=2;
+var LANE_H=28,LANE_GAP=3,LANE_PAD=4;
+var ZOOMS=[600,800,1100]; /* ★ 3 zoom levels: min-width px */
+var ZOOM_LABELS=["مُصغّر","متوسط","مُكبّر"];
+var _sH=null,_wH=null;
+var APT_FULL_BUILDING=20; /* ★ XX00 = 20 apartments */
+
+/* ★ NEW: View state */
+var curView='gantt';                     /* gantt | matrix | due | tracking */
+var dueMode=1;                           /* 1 = exclude مستحق, 2 = include */
+var trackSubView='bld';                  /* bld | mon | det */
+var trackYearFrom=null,trackYearTo=null; /* year range for tracking */
+var matYearFrom=null,matYearTo=null;     /* year range for matrix */
+var matOnlyLink=true;                    /* matrix: show only contracts with link */
+var APPROACHING_DAYS=30;                 /* days threshold for اقترب الميعاد */
+
+/* Status codes (from 1103_Status) */
+var ST_NAMES={1:'لاغي',2:'تم السداد',3:'سداد بزيادة',4:'مستحق',5:'سداد جزء',6:'غير مسدد بالكامل',7:'جزء غير مسدد',8:'اقترب الميعاد'};
+
+function mkAc(ap,b){ap=Number(ap);b=String(b||"");if(isNaN(ap)||!b||b==="0")return b+ap;if(ap<0)return b+"-"+String(10+Math.abs(ap)).slice(-1);return b+String(100+ap).slice(-2);}
+/* ★ Check if code is full building (XX00) */
+function isFullBld(code){return/^[A-Z]00$/.test(code);}
+function aptCount(code){return isFullBld(code)?APT_FULL_BUILDING:1;}
+function fmt(d){if(!d)return"-";return d.getFullYear()+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+String(d.getDate()).padStart(2,"0");}
+function fN(n){return n==null?"-":Number(n).toLocaleString("en-US");}
+function doy(d,y){return Math.floor((d-new Date(y,0,1))/864e5);}
+function diy(y){return(new Date(y,11,31)-new Date(y,0,1))/864e5+1;}
+function barColors(c){if(c.lv)return{bg:'var(--clr-leave)',border:'var(--clr-leave-dark)',tc:'#991B1B'};if(c.pr===1)return{bg:'var(--clr-yearly)',border:'var(--clr-yearly-dark)',tc:'#1E3A5F'};if(c.pr===2)return{bg:'var(--clr-monthly)',border:'var(--clr-monthly-dark)',tc:'#7C2D12'};return{bg:'var(--clr-other)',border:'var(--clr-other-dark)',tc:'#374151'};}
+function shareApp(){var url=window.location.href;if(navigator.share){navigator.share({title:'مخطط إيجارات الشقق',url:url}).catch(function(){});}else{navigator.clipboard.writeText(url).then(function(){var t=document.getElementById('shareToast');t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2500);}).catch(function(){prompt('انسخ الرابط:',url);});}}
+/* ★ Generic JSONP sheet loader */
+function loadSheet(sheetName){return new Promise(function(ok,no){var cb="__g_"+Math.random().toString(36).slice(2);var tm=setTimeout(function(){delete window[cb];no(new Error("انتهت مهلة الاتصال بـ "+sheetName));},20000);window[cb]=function(r){clearTimeout(tm);delete window[cb];if(r.status!=="ok"){no(new Error(((r.errors||[])[0]||{}).message||r.status));return;}ok(r.table);};var s=document.createElement("script");s.setAttribute("data-g","1");s.src="https://docs.google.com/spreadsheets/d/"+SID+"/gviz/tq?tqx=responseHandler:"+cb+"&sheet="+encodeURIComponent(sheetName);s.onerror=function(){clearTimeout(tm);delete window[cb];no(new Error("فشل الاتصال — "+sheetName));};document.head.appendChild(s);});}
+
+/* Parse Date(y,m,d) or Date(y,m,d,h,m,s) string from gviz */
+function parseGvizDate(v){if(typeof v!=="string")return null;var m=v.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/);return m?new Date(+m[1],+m[2],+m[3],+(m[4]||0),+(m[5]||0),+(m[6]||0)):null;}
+
+/* Load & parse Contracts (1201_Contracts, Item=1101) */
+function loadContracts(){return loadSheet("1201_Contracts").then(function(t){var ci={};t.cols.forEach(function(c,i){ci[c.label]=i;});var out=[];t.rows.forEach(function(row){var cells=row.c;if(!cells)return;function v(n){var i=ci[n];return(i!=null&&cells[i])?cells[i].v:null;}if(v("Item")!=1101||v("Cancel")===true)return;function gd(n){var i=ci[n];if(i==null||!cells[i])return null;return parseGvizDate(cells[i].v);}var sd=gd("Date_Start"),ed=gd("Date_End");if(!sd||!ed)return;var lv=gd("Date_End_Leave");out.push({sn:Number(v("SN")||0),ac:mkAc(v("Ap_Number"),v("Bul_Code")),bc:String(v("Bul_Code")||""),pn:v("Person")||"",am:Number(v("Amount")||0),pays:Number(v("Payments")||1),pr:Number(v("Period")||0),sd:sd,ed:ed,lv:lv,de:lv||ed,lk:v("Link_Con")||""});});return out;});}
+
+/* Load Schedules (1202_Schedule) */
+function loadSchedules(){return loadSheet("1202_Schedule").then(function(t){var ci={};t.cols.forEach(function(c,i){ci[c.label]=i;});var out=[];t.rows.forEach(function(row){var cells=row.c;if(!cells)return;function v(n){var i=ci[n];return(i!=null&&cells[i])?cells[i].v:null;}var sn=Number(v("SN")||0),cs=Number(v("Con_SN")||0);if(!sn||!cs)return;var i=ci["Date"];var dt=(i!=null&&cells[i])?parseGvizDate(cells[i].v):null;if(!dt)return;out.push({sn:sn,cs:cs,am:Number(v("Amount")||0),dt:dt,cx:!!v("Cancel"),hd:!!v("Hide")});});return out;});}
+
+/* Load Transactions (1203_Transactions, Item=1101 only for now) */
+function loadTransactions(){return loadSheet("1203_Transactions").then(function(t){var ci={};t.cols.forEach(function(c,i){ci[c.label]=i;});var out=[];t.rows.forEach(function(row){var cells=row.c;if(!cells)return;function v(n){var i=ci[n];return(i!=null&&cells[i])?cells[i].v:null;}var it=Number(v("Item")||0);if(it!==1101&&it!==1102&&it!==1103)return;var i=ci["Date"];var dt=(i!=null&&cells[i])?parseGvizDate(cells[i].v):null;if(!dt)return;out.push({sn:Number(v("SN")||0),dt:dt,it:it,nt:v("Note")||"",am:Number(v("Amount")||0),sc:Number(v("Schedule")||0),ap:v("Ap_Number2"),bl:v("Bul_Code2")||""});});return out;});}
+
+/* Load all in parallel */
+function loadAllData(){return new Promise(function(ok,no){document.querySelectorAll("script[data-g]").forEach(function(s){s.remove();});Promise.all([loadContracts(),loadSchedules(),loadTransactions()]).then(function(r){allC=r[0];allS=r[1];allT=r[2];ok();}).catch(no);});}
+function getF(){var ys=new Date(curY,0,1),ye=new Date(curY,11,31,23,59,59);return allC.filter(function(c){return!(c.sd>ye||c.de<ys)&&(curB==="all"||c.bc===curB);});}
+function getAllApts(){var m={};allC.forEach(function(c){if(!m[c.ac])m[c.ac]={bc:c.bc};});return m;}
+function sortCode(a,b){var ba=a.replace(/[\d-]/g,""),bb=b.replace(/[\d-]/g,"");if(ba!==bb)return ba.localeCompare(bb);var na=a.match(/-?\d+/),nb=b.match(/-?\d+/);na=na?parseInt(na[0]):0;nb=nb?parseInt(nb[0]):0;return na-nb;}
+function getG(flt){var aa=getAllApts();var fm={};flt.forEach(function(c){if(!fm[c.ac])fm[c.ac]=[];fm[c.ac].push(c);});var codes=Object.keys(aa).filter(function(code){return curB==="all"||aa[code].bc===curB;}).sort(sortCode);return codes.map(function(code){return[code,fm[code]||[]];});}
+function getYrs(){var s=new Set();allC.forEach(function(c){s.add(c.sd.getFullYear());s.add(c.de.getFullYear());});return Array.from(s).sort();}
+function getBlds(){return Array.from(new Set(allC.map(function(c){return c.bc;}))).filter(function(b){return b&&b!=="0";}).sort();}
+function assignLanes(cts,yS,yE){var items=cts.map(function(c){return{c:c,cs:c.sd<yS?yS:c.sd,ce:c.de>yE?yE:c.de};}).sort(function(a,b){return a.cs-b.cs;});var lanes=[],hasOv=false;items.forEach(function(it){var placed=false;for(var l=0;l<lanes.length;l++){if(it.cs>=lanes[l].end){lanes[l].end=it.ce;it.lane=l;placed=true;break;}}if(!placed){if(lanes.length>0)hasOv=true;it.lane=lanes.length;lanes.push({end:it.ce});}});return{items:items,lc:Math.max(lanes.length,1),ov:hasOv};}
+
+function render(){
+  updatePageSize();
+  if(curView==='gantt')return renderGantt();
+  if(curView==='matrix')return renderMatrix();
+  if(curView==='due')return renderDue();
+  if(curView==='tracking')return renderTracking();
+}
+
+/* Inject @page size rule based on current view */
+function updatePageSize(){
+  var s=document.getElementById('dynPageStyle');
+  if(!s){s=document.createElement('style');s.id='dynPageStyle';document.head.appendChild(s);}
+  var css;
+  if(curView==='gantt'){css='@media print{@page{size:A4 landscape;margin:8mm}}';}
+  else{css='@media print{@page{size:A4 portrait;margin:12mm 10mm}}';}
+  s.textContent=css;
+}
+
+/* ============ SHARED HEADER + TABS ============ */
+function renderHeaderTabs(pageTitle){
+  var h='<div class="header no-print"><div class="header-inner"><div><h1>\u{1F4CA} مخطط إيجارات الشقق</h1><p>'+pageTitle+'</p></div><div class="header-btns"><button class="action-btn" onclick="shareApp()">\u{1F517} مشاركة</button><button class="action-btn" onclick="init()">\u{1F504} تحديث</button><button class="action-btn" onclick="window.print()">\u{1F5A8}\uFE0F طباعة</button></div></div></div>';
+  var tabs=[['gantt','\u{1F4CA}','مخطط جانت'],['matrix','\u{1F4CB}','عقود التأجير'],['due','\u{1F4B0}','مبالغ للتحصيل'],['tracking','\u{1F4C8}','متابعة المتحصلات']];
+  h+='<div class="tabs-row no-print"><div class="tabs-inner">';
+  tabs.forEach(function(t){h+='<button class="tab-btn'+(curView===t[0]?' active':'')+'" onclick="sV(\''+t[0]+'\')"><span class="tab-icon">'+t[1]+'</span> '+t[2]+'</button>';});
+  h+='</div></div>';
+  return h;
+}
+
+function sV(v){curView=v;window.scrollTo(0,0);render();}
+
+/* ============ REPORT 1: MATRIX (GANTT) ============ */
+function renderGantt(){
+  if(_sH){window.removeEventListener('scroll',_sH);_sH=null;}
+  if(_wH){var ow=document.getElementById('chartWrap');if(ow)ow.removeEventListener('scroll',_wH);_wH=null;}
+
+  var flt=getF(),grp=getG(flt),yrs=getYrs(),blds=getBlds();
+  var td=diy(curY),ms=[];for(var i=0;i<12;i++)ms.push(doy(new Date(curY,i,1),curY));
+  var mw=ms.map(function(s,i){return((i<11?ms[i+1]:td)-s)/td*100;});
+
+  var incomplete=flt.filter(function(c){return!!c.lv;}),complete=flt.filter(function(c){return!c.lv;});
+  var yearly=complete.filter(function(c){return c.pr===1;}),monthly=complete.filter(function(c){return c.pr===2;});
+
+  /* ★ Count apartments considering XX00 = 20 */
+  var rentedCodes=new Set(complete.map(function(c){return c.ac;}));
+  var uaRented=0;rentedCodes.forEach(function(code){uaRented+=aptCount(code);});
+  /* Total apartments */
+  var allApts=getAllApts();
+  var allCodes=Object.keys(allApts).filter(function(code){return curB==="all"||allApts[code].bc===curB;});
+  var uaTotal=0;allCodes.forEach(function(code){uaTotal+=aptCount(code);});
+
+  var taAll=complete.reduce(function(s,c){return s+c.am;},0);
+  var taY=yearly.reduce(function(s,c){return s+c.am;},0);
+  var taM=monthly.reduce(function(s,c){return s+c.am;},0);
+  var taInc=incomplete.reduce(function(s,c){return s+c.am;},0);
+
+  var overlapApts=[],leaveAptSet=new Set();
+  var yS=new Date(curY,0,1),yE=new Date(curY,11,31,23,59,59);
+  grp.forEach(function(e){if(!e[1].length)return;var li=assignLanes(e[1],yS,yE);if(li.ov)overlapApts.push(e[0]);e[1].forEach(function(c){if(c.lv)leaveAptSet.add(c.ac);});});
+  var now=new Date(),tp=-1;if(now.getFullYear()===curY)tp=doy(now,curY)/td*100;
+  var yIdx=yrs.indexOf(curY),prevYr=yIdx>0?yrs[yIdx-1]:null,nextYr=yIdx<yrs.length-1?yrs[yIdx+1]:null;
+  var h='';
+
+  h+=renderHeaderTabs('عرض العقود الإيجارية حسب الفترة الزمنية');
+  h+='<div class="header-print"><h1 class="hp-title">\u{1F4CA} مخطط إيجارات الشقق</h1><p class="hp-sub">عرض العقود الإيجارية حسب الفترة الزمنية</p><div class="hp-year">'+curY+'</div></div>';
+
+  /* Controls with zoom */
+  h+='<div class="controls no-print"><div class="ctrl-group"><label class="ctrl-label">السنة</label><div class="year-sel"><button class="year-arrow" onclick="chY(-1)"'+(prevYr?'':' disabled style="opacity:.4;cursor:default"')+'>\u25B6';if(prevYr)h+='<span class="arrow-tip">'+prevYr+' \u2190 السنة السابقة</span>';h+='</button><select onchange="sY(+this.value)">';yrs.forEach(function(y){h+='<option value="'+y+'"'+(y===curY?' selected':'')+'>'+y+'</option>';});h+='</select><button class="year-arrow" onclick="chY(1)"'+(nextYr?'':' disabled style="opacity:.4;cursor:default"')+'>\u25C0';if(nextYr)h+='<span class="arrow-tip">السنة التالية \u2192 '+nextYr+'</span>';h+='</button></div></div>';
+  h+='<div class="ctrl-group"><label class="ctrl-label">المبنى</label><select class="bld-select" onchange="sB(this.value)"><option value="all"'+(curB==="all"?" selected":"")+'>جميع المباني</option>';blds.forEach(function(b){h+='<option value="'+b+'"'+(b===curB?' selected':'')+'>المبنى '+b+'</option>';});h+='</select></div>';
+  /* ★ Zoom */
+  h+='<div class="ctrl-group"><label class="ctrl-label">حجم العرض</label><div class="zoom-btns">';
+  for(var zi=0;zi<3;zi++)h+='<button class="zoom-btn'+(curZoom===zi?' active':'')+'" onclick="sZ('+zi+')">'+ZOOM_LABELS[zi]+'</button>';
+  h+='</div></div></div>';
+
+  h+='<div class="legend-row"><span style="font-weight:600;color:var(--text-mid)">دليل الألوان:</span><span class="legend-item"><span class="legend-swatch" style="background:var(--clr-yearly)"></span>إيجارات سنوية</span><span class="legend-item"><span class="legend-swatch" style="background:var(--clr-monthly)"></span>إيجارات شهرية</span><span class="legend-item"><span class="legend-swatch" style="background:var(--clr-leave)"></span>عقود غير مكتملة</span><span class="legend-item"><span style="font-size:14px">\u26A0\uFE0F</span> تداخل</span><span class="legend-item"><span style="font-size:14px">\u{1F6AA}</span> مغادرة</span></div>';
+  if(overlapApts.length>0)h+='<div class="overlap-banner"><div class="overlap-banner-inner"><span class="ob-icon">\u26A0\uFE0F</span><span class="ob-title">تداخل في فترات الإيجار!</span><span class="ob-list">الشقق: <b>'+overlapApts.join(' ، ')+'</b></span></div></div>';
+
+  /* ★ Stats with X من Y */
+  h+='<div class="stats-row">';
+  h+='<div class="stat-card" style="border-right:4px solid var(--accent-blue)"><div class="stat-val">'+uaRented+' <span class="stat-total">من '+uaTotal+'</span></div><div class="stat-lbl">شقة مستأجرة</div><div class="stat-sub">الإيجارات السنوية: <b>'+new Set(yearly.map(function(c){return c.ac;})).size+'</b><br>الإيجارات الشهرية: <b>'+new Set(monthly.map(function(c){return c.ac;})).size+'</b>'+(incomplete.length?'<br>عقود غير مكتملة: <span class="s-red">'+incomplete.length+'</span>':'')+'</div></div>';
+  h+='<div class="stat-card" style="border-right:4px solid var(--accent-green)"><div class="stat-val" style="color:#2E7D32">'+fN(taAll)+'</div><div class="stat-lbl">إجمالي المبالغ (ر.س)</div><div class="stat-sub">الإيجارات السنوية: <b>'+fN(taY)+'</b><br>الإيجارات الشهرية: <b>'+fN(taM)+'</b>'+(incomplete.length?'<br>عقود غير مكتملة: <span class="s-red">'+fN(taInc)+'</span>':'')+'</div></div>';
+  h+='<div class="stat-card" style="border-right:4px solid var(--accent-orange)"><div class="stat-val">'+complete.length+'</div><div class="stat-lbl">عدد العقود</div><div class="stat-sub">الإيجارات السنوية: <b>'+yearly.length+'</b><br>الإيجارات الشهرية: <b>'+monthly.length+'</b>'+(incomplete.length?'<br>عقود غير مكتملة: <span class="s-red">'+incomplete.length+'</span>':'')+'</div></div></div>';
+
+  /* Chart */
+  h+='<div class="chart-container"><div class="chart-wrap" id="chartWrap"><div class="chart-inner" id="chartInner" style="min-width:'+ZOOMS[curZoom]+'px"><table class="g-table" id="gTable"><thead id="gThead"><tr><th class="label-th">الشقة</th>';
+  mw.forEach(function(w,i){h+='<th style="width:'+w+'%">'+MA[i]+'<div class="en">'+ME[i]+'</div></th>';});
+  h+='</tr></thead><tbody>';
+
+  var isFirstRow=true;
+  grp.forEach(function(entry,ri){
+    var code=entry[0],cts=entry[1],isEmpty=cts.length===0;
+    var rowBg=ri%2===0;
+    if(isEmpty){
+      h+='<tr class="g-row"><td class="label-td" style="height:36px"><span class="apt-badge empty">'+code+'</span>';
+      if(isFullBld(code))h+='<div style="font-size:9px;color:var(--text-muted);margin-top:2px">عمارة كاملة</div>';
+      h+='</td><td colspan="12" class="bars-td" style="height:36px"><div class="bars-wrap">';
+      ms.forEach(function(s){h+='<div class="grid-line" style="right:'+(s/td*100)+'%"></div>';});
+      if(tp>=0){h+='<div class="today-line" style="right:'+tp+'%">';if(isFirstRow){h+='<span class="today-label">اليوم</span>';isFirstRow=false;}h+='</div>';}
+      h+='</div></td></tr>';
+    }else{
+      var li=assignLanes(cts,yS,yE),nL=li.lc,rowH=LANE_PAD*2+nL*LANE_H+(nL-1)*LANE_GAP;
+      var hasLvApt=leaveAptSet.has(code);
+      h+='<tr class="g-row"><td class="label-td" style="height:'+rowH+'px"><span class="apt-badge">'+code+'</span>';
+      if(isFullBld(code))h+='<div style="font-size:9px;color:var(--text-muted);margin-top:2px">عمارة كاملة</div>';
+      if(li.ov||hasLvApt){h+='<div class="label-icons">';if(li.ov)h+='<span class="overlap-warn" title="تداخل">\u26A0\uFE0F</span>';if(hasLvApt)h+='<span class="leave-warn" title="مغادرة">\u{1F6AA}</span>';h+='</div>';}
+      h+='</td><td colspan="12" class="bars-td" style="height:'+rowH+'px"><div class="bars-wrap">';
+      ms.forEach(function(s){h+='<div class="grid-line" style="right:'+(s/td*100)+'%"></div>';});
+      if(tp>=0){h+='<div class="today-line" style="right:'+tp+'%">';if(isFirstRow){h+='<span class="today-label">اليوم</span>';isFirstRow=false;}h+='</div>';}
+      li.items.forEach(function(item){var c=item.c,sd=doy(item.cs,curY),ed=doy(item.ce,curY);var rp=(sd/td*100),wp=Math.max((ed-sd+1)/td*100,0.4);var topPx=LANE_PAD+item.lane*(LANE_H+LANE_GAP);var cl=barColors(c);var ep=(c.pn||"").replace(/"/g,"&quot;").replace(/'/g,"&#39;");var lbl='';if(wp>16)lbl=fN(c.am)+(c.pn?' \u00B7 '+c.pn:'');else if(wp>8)lbl=fN(c.am);h+='<div class="gantt-bar" style="right:'+rp+'%;width:'+wp+'%;top:'+topPx+'px;height:'+LANE_H+'px" data-code="'+code+'" data-person="'+ep+'" data-amount="'+c.am+'" data-start="'+fmt(c.sd)+'" data-end="'+fmt(c.ed)+'" data-leave="'+(c.lv?fmt(c.lv):'')+'" data-color="'+cl.border+'" onclick="sT(event,this)"><div class="bar-inner" style="background:'+cl.bg+';border-color:'+cl.border+'">';if(lbl)h+='<span class="bar-text" style="color:'+cl.tc+'">'+lbl+'</span>';h+='</div>';if(c.lv){h+='<div class="leave-marker"></div>';if(wp>4)h+='<span class="leave-tag">مغادرة</span>';}h+='</div>';});
+      h+='</div></td></tr>';
+    }
+  });
+
+  h+='</tbody><tfoot><tr><td></td>';mw.forEach(function(w,i){h+='<td style="width:'+w+'%">'+ME[i]+' '+curY+'</td>';});h+='</tr></tfoot></table></div></div></div>';
+  h+='<div class="footer">إجمالي العقود: '+flt.length+' عقد — '+curY+' | آخر تحديث: '+new Date().toLocaleDateString("ar-SA")+'</div>';
+  document.getElementById("app").innerHTML=h;
+  requestAnimationFrame(function(){requestAnimationFrame(setupSticky);});
+}
+
+function setupSticky(){var thead=document.getElementById('gThead');var wrap=document.getElementById('chartWrap');var sticky=document.getElementById('stickyHeader');if(!thead||!wrap||!sticky)return;var origThs=thead.querySelectorAll('th');var widths=[];origThs.forEach(function(th){widths.push(th.getBoundingClientRect().width);});var tableW=document.getElementById('gTable').offsetWidth;var cloneHTML='<table style="width:'+tableW+'px;table-layout:fixed"><tr>';origThs.forEach(function(th,i){cloneHTML+='<th style="width:'+widths[i]+'px;min-width:'+widths[i]+'px">'+th.innerHTML+'</th>';});cloneHTML+='</tr></table>';function update(){var wR=wrap.getBoundingClientRect();var tR=thead.getBoundingClientRect();var tf=wrap.querySelector('tfoot');var tB=tf?tf.getBoundingClientRect().top:wR.bottom;if(tR.bottom<0&&tB>50){sticky.innerHTML=cloneHTML;sticky.style.display='block';sticky.style.left=wR.left+'px';sticky.style.width=wR.width+'px';sticky.scrollLeft=wrap.scrollLeft;}else{sticky.style.display='none';}}_sH=update;window.addEventListener('scroll',_sH,{passive:true});_wH=function(){if(sticky.style.display==='block')sticky.scrollLeft=wrap.scrollLeft;};wrap.addEventListener('scroll',_wH,{passive:true});window.addEventListener('resize',function(){var ths2=thead.querySelectorAll('th');var w2=[];ths2.forEach(function(th){w2.push(th.getBoundingClientRect().width);});var tw2=document.getElementById('gTable').offsetWidth;cloneHTML='<table style="width:'+tw2+'px;table-layout:fixed"><tr>';ths2.forEach(function(th,i){cloneHTML+='<th style="width:'+w2[i]+'px;min-width:'+w2[i]+'px">'+th.innerHTML+'</th>';});cloneHTML+='</tr></table>';update();});update();}
+
+/* ============ HELPERS FOR NEW REPORTS ============ */
+function fmtD(d){if(!d||isNaN(d.getTime()))return"-";return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();}
+function getAllYears(){var s=new Set();allC.forEach(function(c){s.add(c.sd.getFullYear());});allS.forEach(function(x){if(!x.cx&&!x.hd)s.add(x.dt.getFullYear());});allT.forEach(function(x){s.add(x.dt.getFullYear());});return Array.from(s).sort(function(a,b){return a-b;});}
+function contractBySN(){var m={};allC.forEach(function(c){m[c.sn]=c;});return m;}
+function daysBetween(a,b){return Math.floor((b-a)/864e5);}
+
+/* Compute status for a single schedule row: returns status code 1-8 */
+function compStat(sched,collected,today){
+  if(sched.cx)return 1;
+  if(collected>sched.am+0.5)return 3;                    // سداد بزيادة
+  if(Math.abs(collected-sched.am)<0.5)return 2;          // تم السداد
+  var dUntil=daysBetween(today,sched.dt);
+  if(collected>0.5){return dUntil<0?7:5;}                // جزء
+  if(dUntil<0)return 6;                                  // غير مسدد بالكامل
+  if(dUntil<=APPROACHING_DAYS)return 8;                  // اقترب الميعاد
+  return 4;                                              // مستحق
+}
+
+/* Build enriched schedule rows: each includes contract, collected, status, order */
+function buildScheduleRows(){
+  var cBySN=contractBySN();
+  var today=new Date();today.setHours(0,0,0,0);
+  // Sum transactions per schedule
+  var colBySc={};
+  allT.forEach(function(t){if(t.sc){colBySc[t.sc]=(colBySc[t.sc]||0)+t.am;}});
+  // Compute payment order within contract (by date ascending)
+  var bySN={}; allS.forEach(function(s){if(!bySN[s.cs])bySN[s.cs]=[];bySN[s.cs].push(s);});
+  Object.keys(bySN).forEach(function(k){bySN[k].sort(function(a,b){return a.dt-b.dt;});bySN[k].forEach(function(s,i){s._ord=i+1;});});
+  // Build rows
+  var rows=[];
+  allS.forEach(function(s){
+    if(s.hd)return;
+    var con=cBySN[s.cs];
+    if(!con)return;  // No matching contract (maybe Item != 1101)
+    var coll=colBySc[s.sn]||0;
+    var st=compStat(s,coll,today);
+    if(st===1)return; // skip cancelled
+    var days=Math.max(0,daysBetween(con.sd,con.ed));
+    rows.push({s:s,c:con,coll:coll,pend:Math.max(0,s.am-coll),total:s.am,st:st,ord:s._ord,days:days});
+  });
+  return rows;
+}
+
+/* ============ REPORT 1: CONTRACT MATRIX ============ */
+function renderMatrix(){
+  var h=renderHeaderTabs('تجميع عقود التأجير للغير — مصفوفة سنوية');
+  h+='<div class="header-print"><h1 class="hp-title">\u{1F4CB} تجميع عقود التأجير للغير</h1><p class="hp-sub">مصفوفة العقود حسب سنة البداية</p></div>';
+
+  // Base set: contracts with a tenant
+  var baseC=allC.filter(function(c){return c.pn;});
+  var allYrs=Array.from(new Set(baseC.map(function(c){return c.sd.getFullYear();}))).sort(function(a,b){return a-b;});
+  if(!allYrs.length){document.getElementById("app").innerHTML=h+'<div class="rpt-wrap"><div class="rpt-card"><div class="empty-state">لا توجد عقود للعرض</div></div></div>';return;}
+
+  // Initialize / validate year range
+  if(matYearFrom==null||allYrs.indexOf(matYearFrom)<0)matYearFrom=allYrs[0];
+  if(matYearTo==null||allYrs.indexOf(matYearTo)<0)matYearTo=allYrs[allYrs.length-1];
+  if(matYearFrom>matYearTo){var _t=matYearFrom;matYearFrom=matYearTo;matYearTo=_t;}
+
+  // Apply filters
+  var cc=baseC.filter(function(c){
+    var y=c.sd.getFullYear();
+    if(y<matYearFrom||y>matYearTo)return false;
+    if(matOnlyLink&&!c.lk)return false;
+    return true;
+  });
+
+  // Year columns = full selected range
+  var years=[]; for(var yy=matYearFrom;yy<=matYearTo;yy++)years.push(yy);
+
+  // apt -> [{tenant, years:Set, first:year, links:{year:url}}]
+  var aptMap={};
+  cc.forEach(function(c){
+    var a=c.ac,t=c.pn,y=c.sd.getFullYear();
+    if(!aptMap[a])aptMap[a]=[];
+    var found=aptMap[a].filter(function(x){return x.t===t;})[0];
+    if(!found){found={t:t,years:new Set(),first:y,links:{}};aptMap[a].push(found);}
+    found.years.add(y);
+    if(c.lk)found.links[y]=c.lk;
+    if(y<found.first)found.first=y;
+  });
+
+  var apts=Object.keys(aptMap).sort(sortCode);
+  apts.forEach(function(a){aptMap[a].sort(function(x,y){return x.first-y.first;});});
+
+  var totalContracts=cc.length;
+  var uniqueApts=apts.length;
+  var uniqueTenants=new Set(cc.map(function(c){return c.pn;})).size;
+
+  h+='<div class="rpt-wrap"><div class="rpt-card">';
+  h+='<div class="rpt-head"><div><div class="rpt-title">\u{1F4CB} تجميع عقود التأجير للغير</div><div class="rpt-sub">عرض عقود الإيجار حسب سنة البداية — كل خانة "العقد" تعني وجود عقد بدأ في تلك السنة</div></div></div>';
+
+  // Filter controls
+  h+='<div class="rpt-ctrls no-print">';
+  h+='<div class="rpt-ctrl"><label>من سنة</label><select onchange="sMFR(this.value)">';
+  allYrs.forEach(function(y){h+='<option value="'+y+'"'+(y===matYearFrom?' selected':'')+'>'+y+'</option>';});
+  h+='</select></div>';
+  h+='<div class="rpt-ctrl"><label>إلى سنة</label><select onchange="sMTO(this.value)">';
+  allYrs.forEach(function(y){h+='<option value="'+y+'"'+(y===matYearTo?' selected':'')+'>'+y+'</option>';});
+  h+='</select></div>';
+  h+='<div class="rpt-ctrl"><label style="cursor:pointer"><input type="checkbox" onchange="sMOL(this.checked)"'+(matOnlyLink?' checked':'')+' style="margin-left:6px;cursor:pointer"> العقود ذات الرابط فقط</label></div>';
+  h+='</div>';
+
+  h+='<div class="sum-row"><div class="sum-card"><div class="sum-val">'+totalContracts+'</div><div class="sum-lbl">إجمالي العقود</div></div><div class="sum-card green"><div class="sum-val">'+uniqueApts+'</div><div class="sum-lbl">عدد الشقق</div></div><div class="sum-card orange"><div class="sum-val">'+uniqueTenants+'</div><div class="sum-lbl">عدد المستأجرين</div></div></div>';
+
+  if(!apts.length){
+    h+='<div class="empty-state">لا توجد عقود ضمن الفترة المحددة</div>';
+    h+='</div></div>';
+    h+='<div class="footer">آخر تحديث: '+new Date().toLocaleDateString("ar-EG")+'</div>';
+    document.getElementById("app").innerHTML=h;
+    return;
+  }
+
+  var tblCls='mx-tbl '+(years.length>=4?'mx-wide':'mx-narrow');
+  h+='<div class="d-tbl-wrap"><table class="'+tblCls+'"><thead><tr><th style="width:80px">كود الشقة</th><th>المستأجر</th>';
+  years.forEach(function(y){h+='<th style="width:90px">'+y+'</th>';});
+  h+='</tr></thead><tbody>';
+
+  apts.forEach(function(a){
+    var tenants=aptMap[a];
+    tenants.forEach(function(ti,idx){
+      var isFirst=idx===0;
+      h+='<tr'+(isFirst?' class="apt-first"':'')+'>';
+      if(isFirst){
+        h+='<td class="apt-col'+(tenants.length>1?' apt-merged':'')+'" rowspan="'+tenants.length+'">'+a+'</td>';
+      }
+      h+='<td class="tenant-col">'+escHtml(ti.t)+'</td>';
+      years.forEach(function(y){
+        if(ti.years.has(y)){
+          var lk=ti.links[y]||'';
+          if(lk){h+='<td><a href="'+escHtml(lk)+'" target="_blank" rel="noopener" class="con-link"><span class="con-mark">العقد</span></a></td>';}
+          else{h+='<td><span class="con-mark con-mark-nolink">العقد</span></td>';}
+        }else{h+='<td></td>';}
+      });
+      h+='</tr>';
+    });
+  });
+
+  h+='</tbody></table></div>';
+  h+='</div></div>';
+  h+='<div class="footer">إجمالي '+totalContracts+' عقد في '+uniqueApts+' شقة | آخر تحديث: '+new Date().toLocaleDateString("ar-EG")+'</div>';
+  document.getElementById("app").innerHTML=h;
+}
+
+function escHtml(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+
+/* ============ REPORT 2: DUE PAYMENTS ============ */
+function renderDue(){
+  var h=renderHeaderTabs('متابعة المبالغ المطلوب تحصيلها');
+  h+='<div class="header-print"><h1 class="hp-title">\u{1F4B0} متابعة المبالغ المطلوب تحصيلها</h1><p class="hp-sub">الدفعات غير المسددة وجزء غير مسدد واللي اقترب ميعادها'+(dueMode===2?' والمستحقة':'')+'</p></div>';
+
+  var rows=buildScheduleRows();
+  // Filter by mode
+  var showStatuses;
+  if(dueMode===1){showStatuses=[5,6,7,8];}     // exclude مستحق (4)
+  else{showStatuses=[4,5,6,7,8];}                // include مستحق
+  var filtered=rows.filter(function(r){return showStatuses.indexOf(r.st)>-1;});
+  // Sort by due date ascending
+  filtered.sort(function(a,b){return a.s.dt-b.s.dt;});
+
+  // Build controls
+  h+='<div class="rpt-wrap"><div class="rpt-card">';
+  h+='<div class="rpt-head"><div><div class="rpt-title">\u{1F4B0} متابعة المبالغ المطلوب تحصيلها</div><div class="rpt-sub">'+(dueMode===1?'يعرض: غير مسدد، جزء غير مسدد، اقترب الميعاد (≤'+APPROACHING_DAYS+' يوم)':'يعرض: غير مسدد، جزء غير مسدد، اقترب الميعاد، مستحق')+'</div></div></div>';
+  h+='<div class="rpt-ctrls"><div class="rpt-ctrl"><label>نوع العرض</label><div class="seg-btns">';
+  h+='<button class="seg-btn'+(dueMode===1?' active':'')+'" onclick="sDM(1)">الأولى — بدون المستحق</button>';
+  h+='<button class="seg-btn'+(dueMode===2?' active':'')+'" onclick="sDM(2)">الثانية — شامل المستحق</button>';
+  h+='</div></div></div>';
+
+  // Summary by status
+  var totalPending=0,totalCollected=0,totalScheduled=0;
+  filtered.forEach(function(r){totalPending+=r.pend;totalCollected+=r.coll;totalScheduled+=r.total;});
+  h+='<div class="sum-row"><div class="sum-card"><div class="sum-val">'+filtered.length+'</div><div class="sum-lbl">عدد الدفعات</div></div>';
+  h+='<div class="sum-card orange"><div class="sum-val">'+fN(totalPending)+'</div><div class="sum-lbl">بانتظار التحصيل (ر.س)</div></div>';
+  h+='<div class="sum-card green"><div class="sum-val">'+fN(totalCollected)+'</div><div class="sum-lbl">تم التحصيل (ر.س)</div></div>';
+  h+='<div class="sum-card red"><div class="sum-val">'+fN(totalScheduled)+'</div><div class="sum-lbl">الإجمالي (ر.س)</div></div></div>';
+
+  // Table
+  if(!filtered.length){
+    h+='<div class="empty-state">لا توجد دفعات مطابقة للفلتر الحالي</div>';
+  }else{
+    h+='<div class="d-tbl-wrap"><table class="d-tbl"><thead><tr><th>السنة</th><th>الشهر</th><th>تاريخ الاستحقاق</th><th>الحالة</th><th>كود الشقة</th><th>المستأجر</th><th>عدد الأيام</th><th>ترتيب الدفعة</th><th>تم التحصيل</th><th>بانتظار التحصيل</th><th>الإجمالي</th></tr></thead><tbody>';
+    filtered.forEach(function(r){
+      h+='<tr>';
+      h+='<td class="num">'+r.s.dt.getFullYear()+'</td>';
+      h+='<td>'+MA[r.s.dt.getMonth()]+'</td>';
+      h+='<td class="num">'+fmtD(r.s.dt)+'</td>';
+      h+='<td><span class="st-badge st-'+r.st+'">'+ST_NAMES[r.st]+'</span></td>';
+      h+='<td class="code-cell">'+r.c.ac+'</td>';
+      h+='<td class="nm-cell">'+escHtml(r.c.pn)+'</td>';
+      h+='<td class="num">'+r.days+'</td>';
+      h+='<td class="num">'+r.ord+'</td>';
+      h+='<td class="money money-paid">'+fN(r.coll)+'</td>';
+      h+='<td class="money money-pending">'+fN(r.pend)+'</td>';
+      h+='<td class="money">'+fN(r.total)+'</td>';
+      h+='</tr>';
+    });
+    h+='</tbody><tfoot><tr><td colspan="8" style="text-align:left">الإجمالي</td><td class="money money-paid">'+fN(totalCollected)+'</td><td class="money money-pending">'+fN(totalPending)+'</td><td class="money">'+fN(totalScheduled)+'</td></tr></tfoot></table></div>';
+  }
+  h+='</div></div>';
+  h+='<div class="footer">'+filtered.length+' دفعة مطلوبة التحصيل | آخر تحديث: '+new Date().toLocaleDateString("ar-EG")+'</div>';
+  document.getElementById("app").innerHTML=h;
+}
+
+function sDM(m){dueMode=m;render();}
+
+/* ============ REPORT 3: COLLECTIONS TRACKING ============ */
+function renderTracking(){
+  var h=renderHeaderTabs('متابعة المتحصلات — ملخص بالعمارة والشهور والتفصيلي');
+  h+='<div class="header-print"><h1 class="hp-title">\u{1F4C8} متابعة المتحصلات</h1><p class="hp-sub">الفترة: '+trackYearFrom+' — '+trackYearTo+'</p></div>';
+
+  var allYrs=getAllYears();
+  if(!allYrs.length){document.getElementById("app").innerHTML=h+'<div class="rpt-wrap"><div class="rpt-card"><div class="empty-state">لا توجد بيانات</div></div></div>';return;}
+  if(trackYearFrom<allYrs[0])trackYearFrom=allYrs[0];
+  if(trackYearTo>allYrs[allYrs.length-1])trackYearTo=allYrs[allYrs.length-1];
+  if(trackYearFrom>trackYearTo)trackYearFrom=trackYearTo;
+
+  // Build filtered schedule rows within year range
+  var srows=buildScheduleRows();
+  // Only include rows where due date year in range OR paid within range
+  var inRange=function(y){return y>=trackYearFrom&&y<=trackYearTo;};
+
+  // Prepare data per building, per month, and detailed rows
+  // For each schedule: contributes collected and pending to the month of schedule.Date (if in range)
+  var bldSum={}; // bld -> {coll,pend}
+  var monSum={}; // "y-m" -> {coll,pend, y, m}
+  var details={}; // "y-m" -> array of detail rows
+
+  srows.forEach(function(r){
+    var y=r.s.dt.getFullYear(),m=r.s.dt.getMonth();
+    if(!inRange(y))return;
+    var bc=r.c.bc||'?';
+    if(!bldSum[bc])bldSum[bc]={coll:0,pend:0};
+    bldSum[bc].coll+=r.coll; bldSum[bc].pend+=r.pend;
+    var key=y+'-'+m;
+    if(!monSum[key])monSum[key]={coll:0,pend:0,y:y,m:m};
+    monSum[key].coll+=r.coll; monSum[key].pend+=r.pend;
+    if(!details[key])details[key]=[];
+    details[key].push(r);
+  });
+
+  // Grand totals
+  var gColl=0,gPend=0;
+  Object.keys(bldSum).forEach(function(k){gColl+=bldSum[k].coll;gPend+=bldSum[k].pend;});
+
+  h+='<div class="rpt-wrap"><div class="rpt-card">';
+  h+='<div class="rpt-head"><div><div class="rpt-title">\u{1F4C8} متابعة المتحصلات</div><div class="rpt-sub">تجميع المتحصلات والمبالغ المعلقة حسب الفترة المحددة</div></div></div>';
+
+  // Controls: year range + subview
+  h+='<div class="rpt-ctrls">';
+  h+='<div class="rpt-ctrl"><label>من سنة</label><select onchange="sTFR(this.value)">';
+  allYrs.forEach(function(y){h+='<option value="'+y+'"'+(y===trackYearFrom?' selected':'')+'>'+y+'</option>';});
+  h+='</select></div>';
+  h+='<div class="rpt-ctrl"><label>إلى سنة</label><select onchange="sTTO(this.value)">';
+  allYrs.forEach(function(y){h+='<option value="'+y+'"'+(y===trackYearTo?' selected':'')+'>'+y+'</option>';});
+  h+='</select></div>';
+  h+='<div class="rpt-ctrl"><label>نوع العرض</label><div class="seg-btns">';
+  h+='<button class="seg-btn'+(trackSubView==='bld'?' active':'')+'" onclick="sTV(\'bld\')">بالعمارة</button>';
+  h+='<button class="seg-btn'+(trackSubView==='mon'?' active':'')+'" onclick="sTV(\'mon\')">بالشهور</button>';
+  h+='<button class="seg-btn'+(trackSubView==='det'?' active':'')+'" onclick="sTV(\'det\')">تفصيلي</button>';
+  h+='</div></div></div>';
+
+  // Summary cards
+  h+='<div class="sum-row"><div class="sum-card green"><div class="sum-val">'+fN(gColl)+'</div><div class="sum-lbl">تم التحصيل (ر.س)</div></div>';
+  h+='<div class="sum-card orange"><div class="sum-val">'+fN(gPend)+'</div><div class="sum-lbl">بانتظار التحصيل (ر.س)</div></div>';
+  h+='<div class="sum-card"><div class="sum-val">'+fN(gColl+gPend)+'</div><div class="sum-lbl">الإجمالي (ر.س)</div></div></div>';
+
+  // Subview rendering: for screen show only active, for print show all 3
+  h+='<div class="track-sections">';
+  h+='<div class="track-sect'+(trackSubView==='bld'?' active':'')+'"><div class="track-sect-title">\u{1F3E2} ملخص بالعمارة</div>'+renderTrackBld(bldSum,gColl,gPend)+'</div>';
+  h+='<div class="track-sect'+(trackSubView==='mon'?' active':'')+'"><div class="track-sect-title">\u{1F4C5} ملخص بالشهور</div>'+renderTrackMon(monSum,gColl,gPend)+'</div>';
+  h+='<div class="track-sect'+(trackSubView==='det'?' active':'')+'"><div class="track-sect-title">\u{1F4CB} تفصيلي</div>'+renderTrackDet(monSum,details,gColl,gPend)+'</div>';
+  h+='</div>';
+
+  h+='</div></div>';
+  h+='<div class="footer">الفترة: '+trackYearFrom+' — '+trackYearTo+' | آخر تحديث: '+new Date().toLocaleDateString("ar-EG")+'</div>';
+  document.getElementById("app").innerHTML=h;
+}
+
+function renderTrackBld(bldSum,gColl,gPend){
+  var h='<div class="d-tbl-wrap"><table class="d-tbl"><thead><tr><th>العمارة</th><th>تم التحصيل</th><th>بانتظار التحصيل</th><th>الإجمالي</th></tr></thead><tbody>';
+  var blds=Object.keys(bldSum).sort();
+  if(!blds.length)return '<div class="empty-state">لا توجد بيانات في الفترة المحددة</div>';
+  blds.forEach(function(b){
+    var x=bldSum[b];
+    h+='<tr><td class="code-cell">'+b+'</td>';
+    h+='<td class="money money-paid">'+fN(x.coll)+'</td>';
+    h+='<td class="money money-pending">'+fN(x.pend)+'</td>';
+    h+='<td class="money">'+fN(x.coll+x.pend)+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td>الإجمالي الكلي</td><td class="money money-paid">'+fN(gColl)+'</td><td class="money money-pending">'+fN(gPend)+'</td><td class="money">'+fN(gColl+gPend)+'</td></tr></tfoot></table></div>';
+  return h;
+}
+
+function renderTrackMon(monSum,gColl,gPend){
+  // Group by year, show months under each year
+  var byYr={};
+  Object.keys(monSum).forEach(function(k){var x=monSum[k];if(!byYr[x.y])byYr[x.y]={coll:0,pend:0,months:[]};byYr[x.y].coll+=x.coll;byYr[x.y].pend+=x.pend;byYr[x.y].months.push(x);});
+  var yrs=Object.keys(byYr).map(Number).sort(function(a,b){return a-b;});
+  if(!yrs.length)return '<div class="empty-state">لا توجد بيانات في الفترة المحددة</div>';
+  var h='<div class="d-tbl-wrap"><table class="d-tbl"><thead><tr><th>السنة / الشهر</th><th>تم التحصيل</th><th>بانتظار التحصيل</th><th>الإجمالي</th></tr></thead><tbody>';
+  yrs.forEach(function(y){
+    var yr=byYr[y];
+    h+='<tr><td class="sub-row code-cell">'+y+'</td>';
+    h+='<td class="sub-row money money-paid">'+fN(yr.coll)+'</td>';
+    h+='<td class="sub-row money money-pending">'+fN(yr.pend)+'</td>';
+    h+='<td class="sub-row money">'+fN(yr.coll+yr.pend)+'</td></tr>';
+    yr.months.sort(function(a,b){return a.m-b.m;}).forEach(function(mo){
+      h+='<tr><td style="padding-right:30px;text-align:right">'+MA[mo.m]+'</td>';
+      h+='<td class="money money-paid">'+fN(mo.coll)+'</td>';
+      h+='<td class="money money-pending">'+fN(mo.pend)+'</td>';
+      h+='<td class="money">'+fN(mo.coll+mo.pend)+'</td></tr>';
+    });
+  });
+  h+='</tbody><tfoot><tr><td>الإجمالي الكلي</td><td class="money money-paid">'+fN(gColl)+'</td><td class="money money-pending">'+fN(gPend)+'</td><td class="money">'+fN(gColl+gPend)+'</td></tr></tfoot></table></div>';
+  return h;
+}
+
+function renderTrackDet(monSum,details,gColl,gPend){
+  // Show each schedule row with month/year headers
+  var byYr={};
+  Object.keys(monSum).forEach(function(k){var x=monSum[k];if(!byYr[x.y])byYr[x.y]={coll:0,pend:0,months:[]};byYr[x.y].coll+=x.coll;byYr[x.y].pend+=x.pend;byYr[x.y].months.push(x);});
+  var yrs=Object.keys(byYr).map(Number).sort(function(a,b){return a-b;});
+  if(!yrs.length)return '<div class="empty-state">لا توجد بيانات في الفترة المحددة</div>';
+
+  var h='<div class="d-tbl-wrap"><table class="d-tbl"><thead><tr><th>السنة</th><th>الشهر</th><th>التاريخ</th><th>كود الشقة</th><th>المستأجر</th><th>عدد الأيام</th><th>ترتيب الدفعة</th><th>تم التحصيل</th><th>بانتظار التحصيل</th><th>الإجمالي</th></tr></thead><tbody>';
+
+  yrs.forEach(function(y){
+    var yr=byYr[y];
+    yr.months.sort(function(a,b){return a.m-b.m;}).forEach(function(mo){
+      var dets=details[y+'-'+mo.m];
+      dets.sort(function(a,b){return a.s.dt-b.s.dt;});
+      dets.forEach(function(r){
+        h+='<tr>';
+        h+='<td class="num">'+y+'</td>';
+        h+='<td>'+MA[mo.m]+'</td>';
+        h+='<td class="num">'+fmtD(r.s.dt)+'</td>';
+        h+='<td class="code-cell">'+r.c.ac+'</td>';
+        h+='<td class="nm-cell">'+escHtml(r.c.pn)+'</td>';
+        h+='<td class="num">'+r.days+'</td>';
+        h+='<td class="num">'+r.ord+'</td>';
+        h+='<td class="money money-paid">'+fN(r.coll)+'</td>';
+        h+='<td class="money money-pending">'+fN(r.pend)+'</td>';
+        h+='<td class="money">'+fN(r.total)+'</td>';
+        h+='</tr>';
+      });
+      // Month subtotal
+      h+='<tr><td colspan="7" class="sub-row" style="text-align:left;padding-left:12px"><b>إجمالي '+MA[mo.m]+' '+y+'</b></td>';
+      h+='<td class="sub-row money money-paid">'+fN(mo.coll)+'</td>';
+      h+='<td class="sub-row money money-pending">'+fN(mo.pend)+'</td>';
+      h+='<td class="sub-row money">'+fN(mo.coll+mo.pend)+'</td></tr>';
+    });
+    // Year subtotal
+    h+='<tr><td colspan="7" class="total-row" style="text-align:left;padding-left:12px"><b>إجمالي سنة '+y+'</b></td>';
+    h+='<td class="total-row money money-paid">'+fN(yr.coll)+'</td>';
+    h+='<td class="total-row money money-pending">'+fN(yr.pend)+'</td>';
+    h+='<td class="total-row money">'+fN(yr.coll+yr.pend)+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td colspan="7" style="text-align:left">الإجمالي الكلي</td><td class="money money-paid">'+fN(gColl)+'</td><td class="money money-pending">'+fN(gPend)+'</td><td class="money">'+fN(gColl+gPend)+'</td></tr></tfoot></table></div>';
+  return h;
+}
+
+function sTFR(v){trackYearFrom=+v;if(trackYearFrom>trackYearTo)trackYearTo=trackYearFrom;render();}
+function sTTO(v){trackYearTo=+v;if(trackYearTo<trackYearFrom)trackYearFrom=trackYearTo;render();}
+function sTV(v){trackSubView=v;render();}
+function sMFR(v){matYearFrom=+v;if(matYearFrom>matYearTo)matYearTo=matYearFrom;render();}
+function sMTO(v){matYearTo=+v;if(matYearTo<matYearFrom)matYearFrom=matYearTo;render();}
+function sMOL(v){matOnlyLink=!!v;render();}
+
+function sY(y){curY=y;render();}
+function chY(d){var yrs=getYrs(),i=yrs.indexOf(curY);curY=yrs[Math.max(0,Math.min(yrs.length-1,i+d))]||curY;render();}
+function sB(b){curB=b;render();}
+function sZ(z){curZoom=z;render();}
+function sT(e,el){e.stopPropagation();cT();var r=el.getBoundingClientRect(),top=r.top-220,left=r.left+r.width/2-140;if(top<10)top=r.bottom+10;if(left<10)left=10;if(left+280>window.innerWidth)left=window.innerWidth-290;var ov=document.createElement("div");ov.className="tooltip-overlay";ov.onclick=cT;var t=document.createElement("div");t.className="tooltip-card";t.style.top=top+"px";t.style.left=left+"px";t.onclick=function(ev){ev.stopPropagation();};var hasLv=!!el.dataset.leave;var body='<div class="tip-row"><span class="tip-lbl">المستأجر</span><span class="tip-val">'+(el.dataset.person||"-")+'</span></div><div class="tip-row"><span class="tip-lbl">قيمة الإيجار</span><span class="tip-val">'+fN(+el.dataset.amount)+'</span></div><div class="tip-row"><span class="tip-lbl">بداية العقد</span><span class="tip-val">'+el.dataset.start+'</span></div><div class="tip-row"><span class="tip-lbl">نهاية العقد</span><span class="tip-val">'+el.dataset.end+'</span></div>';if(hasLv)body+='<div class="tip-row tip-row-red"><span class="tip-lbl">\u{1F6AA} تاريخ المغادرة</span><span class="tip-val">'+el.dataset.leave+'</span></div>';t.innerHTML='<button class="tip-close" onclick="cT()">\u2715</button><div class="tip-head"><span class="tip-badge" style="background:'+el.dataset.color+'">'+el.dataset.code+'</span><span class="tip-amount">'+fN(+el.dataset.amount)+' ر.س</span></div><div class="tip-body">'+body+'</div>';ov.appendChild(t);document.body.appendChild(ov);}
+function cT(){document.querySelectorAll(".tooltip-overlay").forEach(function(el){el.remove();});}
+document.addEventListener("keydown",function(e){if(e.key==="Escape")cT();});
+async function init(){document.getElementById("app").innerHTML='<div class="loading-screen"><div class="spinner"></div><p class="loading-text">جاري تحميل البيانات من جوجل شيت...</p></div>';try{await loadAllData();var yrs=getYrs();if(!yrs.includes(curY))curY=yrs[yrs.length-1]||curY;/* init tracking year range defaults */if(trackYearFrom==null){var allYrs=getAllYears();trackYearFrom=allYrs[0]||curY;trackYearTo=allYrs[allYrs.length-1]||curY;}render();}catch(err){document.getElementById("app").innerHTML='<div class="error-screen"><div class="icon">\u26A0\uFE0F</div><h3>خطأ في تحميل البيانات</h3><p>'+err.message+'</p><p style="color:var(--text-muted);font-size:13px;margin-top:6px">تأكد من أن جوجل شيت مشارك بصلاحية عامة</p><button class="retry-btn" onclick="init()">إعادة المحاولة</button></div>';}}
+init();
+</script>
+</body>
+</html>
