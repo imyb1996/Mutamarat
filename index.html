@@ -266,6 +266,27 @@ body{font-family:'Tajawal',sans-serif;background:linear-gradient(135deg,var(--bg
 .sum-card.red .sum-val{color:var(--red)}
 .sum-lbl{font-size:11px;color:var(--text-light);font-weight:500;margin-top:2px}
 
+/* ============ COLUMN SORT + FILTER ============ */
+.th-title{cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:center;gap:4px}
+.col-sort{font-size:10px;opacity:.55;transition:opacity .15s}
+.th-title:hover .col-sort{opacity:1}
+.col-sort.active{opacity:1}
+.col-fbtn{display:inline-block;width:18px;height:18px;line-height:16px;text-align:center;font-size:11px;background:rgba(255,255,255,.15);color:inherit;border:1px solid rgba(255,255,255,.3);border-radius:3px;cursor:pointer;margin-right:4px;padding:0;font-family:inherit}
+.col-fbtn:hover{background:rgba(255,255,255,.3)}
+.col-fbtn.active{background:#F6AD55;color:#fff;border-color:#DD6B20}
+.col-fpop{position:absolute;background:#fff;border:1px solid #CBD5E0;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.18);z-index:200;min-width:200px;max-width:280px;max-height:340px;display:flex;flex-direction:column;font-family:'Tajawal',sans-serif;color:var(--text);text-align:right}
+.col-fpop input[type=text]{margin:8px;padding:5px 8px;font-size:12px;border:1px solid #CBD5E0;border-radius:4px;font-family:inherit;text-align:right}
+.col-fpop .fpop-list{flex:1;overflow-y:auto;padding:4px 8px;font-size:12px;font-weight:normal}
+.col-fpop .fpop-item{display:block;padding:3px 0;cursor:pointer;line-height:1.5}
+.col-fpop .fpop-item:hover{background:#F7FAFC}
+.col-fpop .fpop-item input{margin-left:6px;vertical-align:middle;cursor:pointer}
+.col-fpop .fpop-bar{padding:8px;border-top:1px solid #E2E8F0;display:flex;gap:6px;background:#F7FAFC;border-radius:0 0 6px 6px}
+.col-fpop .fpop-btn{flex:1;padding:5px 8px;font-size:11px;font-weight:600;border:1px solid #CBD5E0;background:#fff;color:var(--text);border-radius:4px;cursor:pointer;font-family:inherit}
+.col-fpop .fpop-btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}
+.col-fpop .fpop-btn:hover{filter:brightness(.95)}
+.col-fpop-overlay{position:fixed;inset:0;z-index:199}
+@media print{.col-sort,.col-fbtn,.col-fpop,.col-fpop-overlay{display:none!important}.th-title{cursor:default}}
+
 /* ============ PRINT ============ */
 @media print{
   .rpt-wrap{max-width:none;padding:0;margin:0}
@@ -304,6 +325,7 @@ var MA=["يناير","فبراير","مارس","أبريل","مايو","يوني
 var ME=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 var SID="1HPVIpAeIwsFrmWKKQ_8XztvPDYZ1mENT_8mz3UyBA7s";
 var allC=[],allS=[],allT=[];      /* Contracts, Schedules, Transactions */
+var payableItems={};              /* Map: Item code → true (loaded from 1106_Items where Payment=2) */
 var curY=new Date().getFullYear(),curB="all",curZoom=2;
 var LANE_H=28,LANE_GAP=3,LANE_PAD=4;
 var ZOOMS=[600,800,1100]; /* ★ 3 zoom levels: min-width px */
@@ -314,6 +336,7 @@ var APT_FULL_BUILDING=20; /* ★ XX00 = 20 apartments */
 /* ★ NEW: View state */
 var curView='gantt';                     /* gantt | matrix | due | tracking */
 var dueMode=1;                           /* 1 = exclude مستحق, 2 = include */
+var duePayMode=1;                        /* same as dueMode but for payables */
 var trackSubView='bld';                  /* bld | mon | det */
 var trackYearFrom=null,trackYearTo=null; /* year range for tracking */
 var trackDefaultsApplied=false;          /* force defaults on first tracking view per page load */
@@ -340,17 +363,42 @@ function loadSheet(sheetName){return new Promise(function(ok,no){var cb="__g_"+M
 /* Parse Date(y,m,d) or Date(y,m,d,h,m,s) string from gviz */
 function parseGvizDate(v){if(typeof v!=="string")return null;var m=v.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/);return m?new Date(+m[1],+m[2],+m[3],+(m[4]||0),+(m[5]||0),+(m[6]||0)):null;}
 
-/* Load & parse Contracts (1201_Contracts, Item=1101) */
-function loadContracts(){return loadSheet("1201_Contracts").then(function(t){var ci={};t.cols.forEach(function(c,i){ci[c.label]=i;});var out=[];t.rows.forEach(function(row){var cells=row.c;if(!cells)return;function v(n){var i=ci[n];return(i!=null&&cells[i])?cells[i].v:null;}if(v("Item")!=1101||v("Cancel")===true)return;function gd(n){var i=ci[n];if(i==null||!cells[i])return null;return parseGvizDate(cells[i].v);}var sd=gd("Date_Start"),ed=gd("Date_End");if(!sd||!ed)return;var lv=gd("Date_End_Leave");out.push({sn:Number(v("SN")||0),ac:mkAc(v("Ap_Number"),v("Bul_Code")),bc:String(v("Bul_Code")||""),pn:v("Person")||"",am:Number(v("Amount")||0),pays:Number(v("Payments")||1),pr:Number(v("Period")||0),sd:sd,ed:ed,lv:lv,de:lv||ed,lk:v("Link_Con")||""});});return out;});}
+/* Load Items classification (1106_Items) — populates payableItems map (Item codes where Payment=2)
+   Tries label first, falls back to id (A,B,C…). Tolerates string "2" or number 2. */
+function loadItems(){return loadSheet("1106_Items").then(function(t){
+  var idx={};
+  t.cols.forEach(function(c,i){
+    if(c.label)idx[String(c.label).trim()]=i;
+    if(c.id)idx[String(c.id).trim()]=i;
+  });
+  function colIdx(names){for(var i=0;i<names.length;i++){if(idx[names[i]]!=null)return idx[names[i]];}return -1;}
+  var iItem=colIdx(["Item","item","ItemCode","Code","البند","Item_Code","SN"]);
+  var iPay =colIdx(["Payment","payment","Pay","Type","PaymentType","النوع","التصنيف"]);
+  var map={};
+  if(iItem<0||iPay<0){console.warn("loadItems: columns not found. iItem="+iItem+" iPay="+iPay+" cols="+t.cols.map(function(c){return c.label+"("+c.id+")";}).join(","));return map;}
+  t.rows.forEach(function(row){
+    var cells=row.c;if(!cells)return;
+    var itC=cells[iItem],pyC=cells[iPay];
+    var it=Number(itC&&itC.v||0);
+    var pyRaw=pyC&&pyC.v;
+    var py=Number(pyRaw);
+    if(it && (py===2 || String(pyRaw).trim()==="2"))map[it]=true;
+  });
+  console.log("loadItems: payable items =",Object.keys(map));
+  return map;
+}).catch(function(e){console.warn("loadItems failed:",e);return {};});}
+
+/* Load & parse Contracts (1201_Contracts) — Income (Item=1101) + Payables (Item in payableItems or Item=4201) */
+function loadContracts(){return loadSheet("1201_Contracts").then(function(t){var ci={};t.cols.forEach(function(c,i){ci[c.label]=i;});var out=[];t.rows.forEach(function(row){var cells=row.c;if(!cells)return;function v(n){var i=ci[n];return(i!=null&&cells[i])?cells[i].v:null;}if(v("Cancel")===true)return;var it=Number(v("Item")||0);var kind;if(it===1101)kind='income';else if(payableItems[it]||it===4201)kind='payable';else return;function gd(n){var i=ci[n];if(i==null||!cells[i])return null;return parseGvizDate(cells[i].v);}var sd=gd("Date_Start"),ed=gd("Date_End");if(!sd||!ed)return;var lv=gd("Date_End_Leave");out.push({sn:Number(v("SN")||0),ac:mkAc(v("Ap_Number"),v("Bul_Code")),bc:String(v("Bul_Code")||""),pn:v("Person")||"",am:Number(v("Amount")||0),pays:Number(v("Payments")||1),pr:Number(v("Period")||0),sd:sd,ed:ed,lv:lv,de:lv||ed,lk:v("Link_Con")||"",kind:kind,it:it});});return out;});}
 
 /* Load Schedules (1202_Schedule) */
 function loadSchedules(){return loadSheet("1202_Schedule").then(function(t){var ci={};t.cols.forEach(function(c,i){ci[c.label]=i;});var out=[];t.rows.forEach(function(row){var cells=row.c;if(!cells)return;function v(n){var i=ci[n];return(i!=null&&cells[i])?cells[i].v:null;}var sn=Number(v("SN")||0),cs=Number(v("Con_SN")||0);if(!sn||!cs)return;var i=ci["Date"];var dt=(i!=null&&cells[i])?parseGvizDate(cells[i].v):null;if(!dt)return;out.push({sn:sn,cs:cs,am:Number(v("Amount")||0),dt:dt,cx:!!v("Cancel"),hd:!!v("Hide")});});return out;});}
 
-/* Load Transactions (1203_Transactions, Item=1101 only for now) */
-function loadTransactions(){return loadSheet("1203_Transactions").then(function(t){var ci={};t.cols.forEach(function(c,i){ci[c.label]=i;});var out=[];t.rows.forEach(function(row){var cells=row.c;if(!cells)return;function v(n){var i=ci[n];return(i!=null&&cells[i])?cells[i].v:null;}var it=Number(v("Item")||0);if(it!==1101&&it!==1102&&it!==1103)return;var i=ci["Date"];var dt=(i!=null&&cells[i])?parseGvizDate(cells[i].v):null;if(!dt)return;out.push({sn:Number(v("SN")||0),dt:dt,it:it,nt:v("Note")||"",am:Number(v("Amount")||0),sc:Number(v("Schedule")||0),ap:v("Ap_Number2"),bl:v("Bul_Code2")||""});});return out;});}
+/* Load Transactions (1203_Transactions) — all transactions; schedule join filters relevance */
+function loadTransactions(){return loadSheet("1203_Transactions").then(function(t){var ci={};t.cols.forEach(function(c,i){ci[c.label]=i;});var out=[];t.rows.forEach(function(row){var cells=row.c;if(!cells)return;function v(n){var i=ci[n];return(i!=null&&cells[i])?cells[i].v:null;}var it=Number(v("Item")||0);var i=ci["Date"];var dt=(i!=null&&cells[i])?parseGvizDate(cells[i].v):null;if(!dt)return;out.push({sn:Number(v("SN")||0),dt:dt,it:it,nt:v("Note")||"",am:Number(v("Amount")||0),sc:Number(v("Schedule")||0),ap:v("Ap_Number2"),bl:v("Bul_Code2")||""});});return out;});}
 
 /* Load all in parallel */
-function loadAllData(){return new Promise(function(ok,no){document.querySelectorAll("script[data-g]").forEach(function(s){s.remove();});Promise.all([loadContracts(),loadSchedules(),loadTransactions()]).then(function(r){allC=r[0];allS=r[1];allT=r[2];ok();}).catch(no);});}
+function loadAllData(){return new Promise(function(ok,no){document.querySelectorAll("script[data-g]").forEach(function(s){s.remove();});loadItems().then(function(im){payableItems=im;console.log("[DBG] payableItems keys:",Object.keys(im));return Promise.all([loadContracts(),loadSchedules(),loadTransactions()]);}).then(function(r){allC=r[0];allS=r[1];allT=r[2];var inc=allC.filter(function(c){return c.kind==='income';}).length;var pay=allC.filter(function(c){return c.kind==='payable';}).length;console.log("[DBG] contracts: income="+inc+" payable="+pay+" total="+allC.length);var payRows=buildScheduleRows('payable');console.log("[DBG] payable schedule rows:",payRows.length,payRows.slice(0,3));ok();}).catch(no);});}
 function getF(){var ys=new Date(curY,0,1),ye=new Date(curY,11,31,23,59,59);return allC.filter(function(c){return!(c.sd>ye||c.de<ys)&&(curB==="all"||c.bc===curB);});}
 function getAllApts(){var m={};allC.forEach(function(c){if(!m[c.ac])m[c.ac]={bc:c.bc};});return m;}
 function sortCode(a,b){var ba=a.replace(/[\d-]/g,""),bb=b.replace(/[\d-]/g,"");if(ba!==bb)return ba.localeCompare(bb);var na=a.match(/-?\d+/),nb=b.match(/-?\d+/);na=na?parseInt(na[0]):0;nb=nb?parseInt(nb[0]):0;return na-nb;}
@@ -361,11 +409,192 @@ function assignLanes(cts,yS,yE){var items=cts.map(function(c){return{c:c,cs:c.sd
 
 function render(){
   updatePageSize();
-  if(curView==='gantt')return renderGantt();
-  if(curView==='matrix')return renderMatrix();
-  if(curView==='due')return renderDue();
-  if(curView==='tracking')return renderTracking();
+  if(curView==='gantt')renderGantt();
+  else if(curView==='matrix')renderMatrix();
+  else if(curView==='due')renderDue();
+  else if(curView==='duePay')renderDuePay();
+  else if(curView==='tracking')renderTracking();
+  setTimeout(enhanceAllTables,0);
 }
+
+/* ============ TABLE ENHANCE: per-column sort + filter ============ */
+function enhanceAllTables(){
+  document.querySelectorAll('#app .d-tbl').forEach(enhanceDataTable);
+}
+function enhanceDataTable(table){
+  if(table.dataset.enhanced)return;
+  table.dataset.enhanced='1';
+  var thead=table.querySelector('thead'),tbody=table.querySelector('tbody');
+  if(!thead||!tbody)return;
+  var hasGroups=!!tbody.querySelector('.sub-row, .total-row');
+  var ths=thead.querySelectorAll('tr:last-child th');
+  ths.forEach(function(th,idx){
+    var origHtml=th.innerHTML;
+    th.innerHTML='';
+    var titleWrap=document.createElement('div');
+    titleWrap.className='th-title';
+    titleWrap.innerHTML=origHtml;
+    var sortIcon=document.createElement('span');
+    sortIcon.className='col-sort';
+    sortIcon.textContent='⇅';
+    titleWrap.appendChild(sortIcon);
+    if(!hasGroups){
+      titleWrap.addEventListener('click',function(){cycleSortColumn(table,idx,sortIcon);});
+    }else{
+      sortIcon.style.display='none';
+      titleWrap.style.cursor='default';
+    }
+    var fbtn=document.createElement('button');
+    fbtn.className='col-fbtn no-print';
+    fbtn.type='button';
+    fbtn.innerHTML='▾';
+    fbtn.title='فلترة';
+    fbtn.addEventListener('click',function(e){e.stopPropagation();openFilterPopup(table,idx,fbtn);});
+    titleWrap.appendChild(fbtn);
+    th.appendChild(titleWrap);
+  });
+  table._colFilters=table._colFilters||{};
+}
+function cycleSortColumn(table,colIdx,iconEl){
+  var allIcons=table.querySelectorAll('.col-sort');
+  var cur=iconEl.dataset.dir||'0';
+  var next=cur==='0'?'1':(cur==='1'?'-1':'0');
+  allIcons.forEach(function(s){s.dataset.dir='0';s.textContent='⇅';s.classList.remove('active');});
+  iconEl.dataset.dir=next;
+  if(next!=='0'){iconEl.classList.add('active');iconEl.textContent=next==='1'?'▲':'▼';}
+  else{iconEl.textContent='⇅';}
+  sortTableByColumn(table,colIdx,+next);
+}
+function sortTableByColumn(table,colIdx,dir){
+  var tbody=table.querySelector('tbody');
+  if(!tbody)return;
+  var rows=Array.from(tbody.children).filter(function(r){return r.tagName==='TR';});
+  if(dir===0){
+    if(table._origOrder)table._origOrder.forEach(function(r){tbody.appendChild(r);});
+    return;
+  }
+  if(!table._origOrder)table._origOrder=rows.slice();
+  rows.sort(function(a,b){
+    var ac=a.cells[colIdx],bc=b.cells[colIdx];
+    var av=(ac?ac.textContent:'').trim(),bv=(bc?bc.textContent:'').trim();
+    var an=parseFloat(av.replace(/[,،\s]/g,'')),bn=parseFloat(bv.replace(/[,،\s]/g,''));
+    if(!isNaN(an)&&!isNaN(bn))return dir*(an-bn);
+    return dir*av.localeCompare(bv,'ar');
+  });
+  rows.forEach(function(r){tbody.appendChild(r);});
+}
+function closeFilterPopups(){document.querySelectorAll('.col-fpop, .col-fpop-overlay').forEach(function(el){el.remove();});}
+function openFilterPopup(table,colIdx,anchorEl){
+  closeFilterPopups();
+  var tbody=table.querySelector('tbody');
+  if(!tbody)return;
+  var rows=Array.from(tbody.children).filter(function(r){return r.tagName==='TR'&&!r.querySelector('.sub-row, .total-row');});
+  var unique={};
+  rows.forEach(function(r){var c=r.cells[colIdx];if(!c)return;var t=(c.textContent||'').trim();unique[t]=true;});
+  var values=Object.keys(unique).sort(function(a,b){
+    var an=parseFloat(a.replace(/[,،\s]/g,'')),bn=parseFloat(b.replace(/[,،\s]/g,''));
+    if(!isNaN(an)&&!isNaN(bn))return an-bn;
+    return a.localeCompare(b,'ar');
+  });
+  var curSel=table._colFilters[colIdx];
+  var overlay=document.createElement('div');
+  overlay.className='col-fpop-overlay';
+  overlay.addEventListener('click',closeFilterPopups);
+  document.body.appendChild(overlay);
+  var pop=document.createElement('div');
+  pop.className='col-fpop';
+  pop.addEventListener('click',function(e){e.stopPropagation();});
+  var searchInp=document.createElement('input');
+  searchInp.type='text';
+  searchInp.placeholder='ابحث...';
+  pop.appendChild(searchInp);
+  var listWrap=document.createElement('div');
+  listWrap.className='fpop-list';
+  var allLbl=document.createElement('label');
+  allLbl.className='fpop-item';
+  allLbl.style.fontWeight='700';
+  allLbl.style.borderBottom='1px solid #E2E8F0';
+  allLbl.style.paddingBottom='5px';
+  allLbl.style.marginBottom='4px';
+  var allCb=document.createElement('input');
+  allCb.type='checkbox';
+  allCb.checked=true;
+  allLbl.appendChild(allCb);
+  allLbl.appendChild(document.createTextNode(' (تحديد الكل)'));
+  listWrap.appendChild(allLbl);
+  var itemCbs=[];
+  values.forEach(function(v){
+    var lbl=document.createElement('label');
+    lbl.className='fpop-item';
+    var cb=document.createElement('input');
+    cb.type='checkbox';
+    cb.value=v;
+    cb.checked=!curSel||curSel.has(v);
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(' '+(v===''?'(فارغ)':v)));
+    listWrap.appendChild(lbl);
+    itemCbs.push({cb:cb,lbl:lbl,val:v});
+  });
+  pop.appendChild(listWrap);
+  function syncAllCb(){
+    var visible=itemCbs.filter(function(x){return x.lbl.style.display!=='none';});
+    var allOn=visible.length>0&&visible.every(function(x){return x.cb.checked;});
+    var noneOn=visible.every(function(x){return !x.cb.checked;});
+    allCb.indeterminate=!allOn&&!noneOn;
+    allCb.checked=allOn;
+  }
+  syncAllCb();
+  allCb.addEventListener('change',function(){var on=allCb.checked;itemCbs.forEach(function(x){if(x.lbl.style.display!=='none')x.cb.checked=on;});});
+  itemCbs.forEach(function(x){x.cb.addEventListener('change',syncAllCb);});
+  searchInp.addEventListener('input',function(){
+    var q=searchInp.value.trim().toLowerCase();
+    itemCbs.forEach(function(x){x.lbl.style.display=(!q||x.val.toLowerCase().indexOf(q)>=0)?'':'none';});
+    syncAllCb();
+  });
+  var bar=document.createElement('div');
+  bar.className='fpop-bar';
+  var okBtn=document.createElement('button');okBtn.className='fpop-btn primary';okBtn.textContent='تطبيق';
+  var clearBtn=document.createElement('button');clearBtn.className='fpop-btn';clearBtn.textContent='مسح الفلتر';
+  var cancelBtn=document.createElement('button');cancelBtn.className='fpop-btn';cancelBtn.textContent='إلغاء';
+  okBtn.addEventListener('click',function(){
+    var selected=new Set();
+    itemCbs.forEach(function(x){if(x.cb.checked)selected.add(x.val);});
+    if(selected.size===values.length){table._colFilters[colIdx]=null;anchorEl.classList.remove('active');}
+    else{table._colFilters[colIdx]=selected;anchorEl.classList.add('active');}
+    applyExcelFilters(table);
+    closeFilterPopups();
+  });
+  clearBtn.addEventListener('click',function(){table._colFilters[colIdx]=null;anchorEl.classList.remove('active');applyExcelFilters(table);closeFilterPopups();});
+  cancelBtn.addEventListener('click',closeFilterPopups);
+  bar.appendChild(okBtn);bar.appendChild(clearBtn);bar.appendChild(cancelBtn);
+  pop.appendChild(bar);
+  document.body.appendChild(pop);
+  var r=anchorEl.getBoundingClientRect();
+  var top=r.bottom+4+window.scrollY,left=r.left+window.scrollX;
+  var pw=pop.offsetWidth,vw=window.innerWidth;
+  if(left+pw>vw-10)left=Math.max(10,vw-pw-10);
+  pop.style.top=top+'px';pop.style.left=left+'px';
+  searchInp.focus();
+}
+function applyExcelFilters(table){
+  var tbody=table.querySelector('tbody');
+  if(!tbody)return;
+  var f=table._colFilters||{};
+  Array.from(tbody.children).forEach(function(row){
+    if(row.tagName!=='TR')return;
+    if(row.querySelector('.sub-row, .total-row'))return;
+    var show=true;
+    Object.keys(f).forEach(function(idxStr){
+      var allowed=f[idxStr];
+      if(!allowed)return;
+      var cell=row.cells[+idxStr];
+      var txt=cell?(cell.textContent||'').trim():'';
+      if(!allowed.has(txt))show=false;
+    });
+    row.style.display=show?'':'none';
+  });
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeFilterPopups();});
 
 /* Inject @page size rule based on current view */
 function updatePageSize(){
@@ -380,7 +609,7 @@ function updatePageSize(){
 /* ============ SHARED HEADER + TABS ============ */
 function renderHeaderTabs(pageTitle){
   var h='<div class="header no-print"><div class="header-inner"><div><h1>\u{1F4CA} مخطط إيجارات الشقق</h1><p>'+pageTitle+'</p></div><div class="header-btns"><button class="action-btn" onclick="shareApp()">\u{1F517} مشاركة</button><button class="action-btn" onclick="init()">\u{1F504} تحديث</button><button class="action-btn" onclick="window.print()">\u{1F5A8}\uFE0F طباعة</button></div></div></div>';
-  var tabs=[['gantt','\u{1F4CA}','مخطط جانت'],['matrix','\u{1F4CB}','عقود التأجير'],['due','\u{1F4B0}','مبالغ للتحصيل'],['tracking','\u{1F4C8}','متابعة المتحصلات']];
+  var tabs=[['gantt','\u{1F4CA}','مخطط جانت'],['matrix','\u{1F4CB}','عقود التأجير'],['due','\u{1F4B0}','مبالغ للتحصيل'],['duePay','\u{1F4B8}','مبالغ للسداد'],['tracking','\u{1F4C8}','متابعة المتحصلات']];
   h+='<div class="tabs-row no-print"><div class="tabs-inner">';
   tabs.forEach(function(t){h+='<button class="tab-btn'+(curView===t[0]?' active':'')+'" onclick="sV(\''+t[0]+'\')"><span class="tab-icon">'+t[1]+'</span> '+t[2]+'</button>';});
   h+='</div></div>';
@@ -497,22 +726,25 @@ function compStat(sched,collected,today){
   return 4;                                              // مستحق
 }
 
-/* Build enriched schedule rows: each includes contract, collected, status, order */
-function buildScheduleRows(){
+/* Build enriched schedule rows: each includes contract, collected, status, order
+   kind: 'income' (default) | 'payable' — filters by contract.kind */
+function buildScheduleRows(kind){
+  kind=kind||'income';
   var cBySN=contractBySN();
   var today=new Date();today.setHours(0,0,0,0);
   // Sum transactions per schedule
   var colBySc={};
   allT.forEach(function(t){if(t.sc){colBySc[t.sc]=(colBySc[t.sc]||0)+t.am;}});
-  // Compute payment order within contract (by date ascending)
-  var bySN={}; allS.forEach(function(s){if(!bySN[s.cs])bySN[s.cs]=[];bySN[s.cs].push(s);});
+  // Compute payment order within contract (by date ascending) — only within same kind
+  var bySN={}; allS.forEach(function(s){var c=cBySN[s.cs];if(!c||c.kind!==kind)return;if(!bySN[s.cs])bySN[s.cs]=[];bySN[s.cs].push(s);});
   Object.keys(bySN).forEach(function(k){bySN[k].sort(function(a,b){return a.dt-b.dt;});bySN[k].forEach(function(s,i){s._ord=i+1;});});
   // Build rows
   var rows=[];
   allS.forEach(function(s){
     if(s.hd)return;
     var con=cBySN[s.cs];
-    if(!con)return;  // No matching contract (maybe Item != 1101)
+    if(!con)return;
+    if(con.kind!==kind)return;
     var coll=colBySc[s.sn]||0;
     var st=compStat(s,coll,today);
     if(st===1)return; // skip cancelled
@@ -632,18 +864,21 @@ function renderDue(){
   var rows=buildScheduleRows();
   // Filter by mode
   var showStatuses;
-  if(dueMode===1){showStatuses=[5,6,7,8];}     // exclude مستحق (4)
-  else{showStatuses=[4,5,6,7,8];}                // include مستحق
+  if(dueMode===1){showStatuses=[5,6,7,8];}        // exclude مستحق (4)
+  else if(dueMode===3){showStatuses=[2,3];}       // fully paid only
+  else{showStatuses=[4,5,6,7,8];}                  // include مستحق
   var filtered=rows.filter(function(r){return showStatuses.indexOf(r.st)>-1;});
   // Sort by due date ascending
   filtered.sort(function(a,b){return a.s.dt-b.s.dt;});
 
   // Build controls
   h+='<div class="rpt-wrap"><div class="rpt-card">';
-  h+='<div class="rpt-head"><div><div class="rpt-title">\u{1F4B0} متابعة المبالغ المطلوب تحصيلها</div><div class="rpt-sub">'+(dueMode===1?'يعرض: غير مسدد، جزء غير مسدد، اقترب الميعاد (≤'+APPROACHING_DAYS+' يوم)':'يعرض: غير مسدد، جزء غير مسدد، اقترب الميعاد، مستحق')+'</div></div></div>';
+  var dueModeSub=(dueMode===1?'يعرض: غير مسدد، جزء غير مسدد، اقترب الميعاد (≤'+APPROACHING_DAYS+' يوم)':(dueMode===3?'يعرض: الدفعات المسددة بالكامل':'يعرض: غير مسدد، جزء غير مسدد، اقترب الميعاد، مستحق'));
+  h+='<div class="rpt-head"><div><div class="rpt-title">\u{1F4B0} متابعة المبالغ المطلوب تحصيلها</div><div class="rpt-sub">'+dueModeSub+'</div></div></div>';
   h+='<div class="rpt-ctrls"><div class="rpt-ctrl"><label>نوع العرض</label><div class="seg-btns">';
   h+='<button class="seg-btn'+(dueMode===1?' active':'')+'" onclick="sDM(1)">الأولى — بدون المستحق</button>';
   h+='<button class="seg-btn'+(dueMode===2?' active':'')+'" onclick="sDM(2)">الثانية — شامل المستحق</button>';
+  h+='<button class="seg-btn'+(dueMode===3?' active':'')+'" onclick="sDM(3)">الثالثة — المسددة بالكامل</button>';
   h+='</div></div></div>';
 
   // Summary by status
@@ -682,6 +917,62 @@ function renderDue(){
 }
 
 function sDM(m){dueMode=m;render();}
+function sDPM(m){duePayMode=m;render();}
+
+/* ============ REPORT 2b: DUE PAYABLES (مبالغ للسداد) ============ */
+function renderDuePay(){
+  var h=renderHeaderTabs('متابعة المبالغ المطلوب سدادها');
+  h+='<div class="header-print"><h1 class="hp-title">\u{1F4B8} متابعة المبالغ المطلوب سدادها</h1><p class="hp-sub">الدفعات غير المسددة وجزء غير مسدد واللي اقترب ميعادها'+(duePayMode===2?' والمستحقة':'')+'</p></div>';
+
+  var rows=buildScheduleRows('payable');
+  var showStatuses;
+  if(duePayMode===1){showStatuses=[5,6,7,8];}
+  else if(duePayMode===3){showStatuses=[2,3];}
+  else{showStatuses=[4,5,6,7,8];}
+  var filtered=rows.filter(function(r){return showStatuses.indexOf(r.st)>-1;});
+  filtered.sort(function(a,b){return a.s.dt-b.s.dt;});
+
+  h+='<div class="rpt-wrap"><div class="rpt-card">';
+  var dpSub=(duePayMode===1?'يعرض: غير مسدد، جزء غير مسدد، اقترب الميعاد (≤'+APPROACHING_DAYS+' يوم)':(duePayMode===3?'يعرض: الدفعات المسددة بالكامل':'يعرض: غير مسدد، جزء غير مسدد، اقترب الميعاد، مستحق'));
+  h+='<div class="rpt-head"><div><div class="rpt-title">\u{1F4B8} متابعة المبالغ المطلوب سدادها</div><div class="rpt-sub">'+dpSub+'</div></div></div>';
+  h+='<div class="rpt-ctrls"><div class="rpt-ctrl"><label>نوع العرض</label><div class="seg-btns">';
+  h+='<button class="seg-btn'+(duePayMode===1?' active':'')+'" onclick="sDPM(1)">الأولى — بدون المستحق</button>';
+  h+='<button class="seg-btn'+(duePayMode===2?' active':'')+'" onclick="sDPM(2)">الثانية — شامل المستحق</button>';
+  h+='<button class="seg-btn'+(duePayMode===3?' active':'')+'" onclick="sDPM(3)">الثالثة — المسددة بالكامل</button>';
+  h+='</div></div></div>';
+
+  var totalPending=0,totalPaid=0,totalScheduled=0;
+  filtered.forEach(function(r){totalPending+=r.pend;totalPaid+=r.coll;totalScheduled+=r.total;});
+  h+='<div class="sum-row"><div class="sum-card"><div class="sum-val">'+filtered.length+'</div><div class="sum-lbl">عدد الدفعات</div></div>';
+  h+='<div class="sum-card orange"><div class="sum-val">'+fN(totalPending)+'</div><div class="sum-lbl">بانتظار السداد (ر.س)</div></div>';
+  h+='<div class="sum-card green"><div class="sum-val">'+fN(totalPaid)+'</div><div class="sum-lbl">تم السداد (ر.س)</div></div>';
+  h+='<div class="sum-card red"><div class="sum-val">'+fN(totalScheduled)+'</div><div class="sum-lbl">الإجمالي (ر.س)</div></div></div>';
+
+  if(!filtered.length){
+    h+='<div class="empty-state">لا توجد دفعات مطابقة للفلتر الحالي</div>';
+  }else{
+    h+='<div class="d-tbl-wrap"><table class="d-tbl"><thead><tr><th>السنة</th><th>الشهر</th><th>تاريخ الاستحقاق</th><th>الحالة</th><th>البند</th><th>المستفيد</th><th>عدد الأيام</th><th>ترتيب الدفعة</th><th>تم السداد</th><th>بانتظار السداد</th><th>الإجمالي</th></tr></thead><tbody>';
+    filtered.forEach(function(r){
+      h+='<tr>';
+      h+='<td class="num">'+r.s.dt.getFullYear()+'</td>';
+      h+='<td>'+MA[r.s.dt.getMonth()]+'</td>';
+      h+='<td class="num">'+fmtD(r.s.dt)+'</td>';
+      h+='<td><span class="st-badge st-'+r.st+'">'+ST_NAMES[r.st]+'</span></td>';
+      h+='<td class="code-cell">'+(r.c.it||'-')+'</td>';
+      h+='<td class="nm-cell">'+escHtml(r.c.pn)+'</td>';
+      h+='<td class="num">'+r.days+'</td>';
+      h+='<td class="num">'+r.ord+'</td>';
+      h+='<td class="money money-paid">'+fN(r.coll)+'</td>';
+      h+='<td class="money money-pending">'+fN(r.pend)+'</td>';
+      h+='<td class="money">'+fN(r.total)+'</td>';
+      h+='</tr>';
+    });
+    h+='</tbody><tfoot><tr><td colspan="8" style="text-align:left">الإجمالي</td><td class="money money-paid">'+fN(totalPaid)+'</td><td class="money money-pending">'+fN(totalPending)+'</td><td class="money">'+fN(totalScheduled)+'</td></tr></tfoot></table></div>';
+  }
+  h+='</div></div>';
+  h+='<div class="footer">'+filtered.length+' دفعة مطلوبة السداد | آخر تحديث: '+new Date().toLocaleDateString("ar-EG")+'</div>';
+  document.getElementById("app").innerHTML=h;
+}
 
 /* ============ REPORT 3: COLLECTIONS TRACKING ============ */
 function renderTracking(){
