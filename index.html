@@ -337,6 +337,7 @@ var APT_FULL_BUILDING=20; /* ★ XX00 = 20 apartments */
 var curView='gantt';                     /* gantt | matrix | due | tracking */
 var dueMode=1;                           /* 1 = exclude مستحق, 2 = include */
 var duePayMode=1;                        /* same as dueMode but for payables */
+var ganttKind='income';                  /* gantt: 'income' (إيجار محصل) | 'payable' (إيجار مدفوع) */
 var trackSubView='bld';                  /* bld | mon | det */
 var trackYearFrom=null,trackYearTo=null; /* year range for tracking */
 var trackDefaultsApplied=false;          /* force defaults on first tracking view per page load */
@@ -399,7 +400,7 @@ function loadTransactions(){return loadSheet("1203_Transactions").then(function(
 
 /* Load all in parallel */
 function loadAllData(){return new Promise(function(ok,no){document.querySelectorAll("script[data-g]").forEach(function(s){s.remove();});loadItems().then(function(im){payableItems=im;console.log("[DBG] payableItems keys:",Object.keys(im));return Promise.all([loadContracts(),loadSchedules(),loadTransactions()]);}).then(function(r){allC=r[0];allS=r[1];allT=r[2];var inc=allC.filter(function(c){return c.kind==='income';}).length;var pay=allC.filter(function(c){return c.kind==='payable';}).length;console.log("[DBG] contracts: income="+inc+" payable="+pay+" total="+allC.length);var payRows=buildScheduleRows('payable');console.log("[DBG] payable schedule rows:",payRows.length,payRows.slice(0,3));ok();}).catch(no);});}
-function getF(){var ys=new Date(curY,0,1),ye=new Date(curY,11,31,23,59,59);return allC.filter(function(c){return!(c.sd>ye||c.de<ys)&&(curB==="all"||c.bc===curB);});}
+function getF(){var ys=new Date(curY,0,1),ye=new Date(curY,11,31,23,59,59);return allC.filter(function(c){return c.kind===ganttKind&&!(c.sd>ye||c.de<ys)&&(curB==="all"||c.bc===curB);});}
 function getAllApts(){var m={};allC.forEach(function(c){if(!m[c.ac])m[c.ac]={bc:c.bc};});return m;}
 function sortCode(a,b){var ba=a.replace(/[\d-]/g,""),bb=b.replace(/[\d-]/g,"");if(ba!==bb)return ba.localeCompare(bb);var na=a.match(/-?\d+/),nb=b.match(/-?\d+/);na=na?parseInt(na[0]):0;nb=nb?parseInt(nb[0]):0;return na-nb;}
 function getG(flt){var aa=getAllApts();var fm={};flt.forEach(function(c){if(!fm[c.ac])fm[c.ac]=[];fm[c.ac].push(c);});var codes=Object.keys(aa).filter(function(code){return curB==="all"||aa[code].bc===curB;}).sort(sortCode);return codes.map(function(code){return[code,fm[code]||[]];});}
@@ -656,6 +657,11 @@ function renderGantt(){
   /* Controls with zoom */
   h+='<div class="controls no-print"><div class="ctrl-group"><label class="ctrl-label">السنة</label><div class="year-sel"><button class="year-arrow" onclick="chY(-1)"'+(prevYr?'':' disabled style="opacity:.4;cursor:default"')+'>\u25B6';if(prevYr)h+='<span class="arrow-tip">'+prevYr+' \u2190 السنة السابقة</span>';h+='</button><select onchange="sY(+this.value)">';yrs.forEach(function(y){h+='<option value="'+y+'"'+(y===curY?' selected':'')+'>'+y+'</option>';});h+='</select><button class="year-arrow" onclick="chY(1)"'+(nextYr?'':' disabled style="opacity:.4;cursor:default"')+'>\u25C0';if(nextYr)h+='<span class="arrow-tip">السنة التالية \u2192 '+nextYr+'</span>';h+='</button></div></div>';
   h+='<div class="ctrl-group"><label class="ctrl-label">المبنى</label><select class="bld-select" onchange="sB(this.value)"><option value="all"'+(curB==="all"?" selected":"")+'>جميع المباني</option>';blds.forEach(function(b){h+='<option value="'+b+'"'+(b===curB?' selected':'')+'>المبنى '+b+'</option>';});h+='</select></div>';
+  /* ★ Rent kind toggle */
+  h+='<div class="ctrl-group"><label class="ctrl-label">نوع الإيجار</label><div class="zoom-btns">';
+  h+='<button class="zoom-btn'+(ganttKind==='income'?' active':'')+'" onclick="sGK(\'income\')">إيجار محصل</button>';
+  h+='<button class="zoom-btn'+(ganttKind==='payable'?' active':'')+'" onclick="sGK(\'payable\')">إيجار مدفوع</button>';
+  h+='</div></div>';
   /* ★ Zoom */
   h+='<div class="ctrl-group"><label class="ctrl-label">حجم العرض</label><div class="zoom-btns">';
   for(var zi=0;zi<3;zi++)h+='<button class="zoom-btn'+(curZoom===zi?' active':'')+'" onclick="sZ('+zi+')">'+ZOOM_LABELS[zi]+'</button>';
@@ -918,6 +924,7 @@ function renderDue(){
 
 function sDM(m){dueMode=m;render();}
 function sDPM(m){duePayMode=m;render();}
+function sGK(k){ganttKind=k;render();}
 
 /* ============ REPORT 2b: DUE PAYABLES (مبالغ للسداد) ============ */
 function renderDuePay(){
