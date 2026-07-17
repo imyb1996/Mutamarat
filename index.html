@@ -324,6 +324,8 @@ body{font-family:'Tajawal',sans-serif;background:linear-gradient(135deg,var(--bg
 @media print{.col-sort,.col-fbtn,.col-fpop,.col-fpop-overlay{display:none!important}.th-title{cursor:default}}
 
 /* ============ P&L REPORT (الإيرادات والمصروفات حسب البند) ============ */
+.d-tbl .money-neg{color:var(--red)}
+.d-tbl tfoot td.money-neg{color:#FECACA!important}
 .pl-row-click{cursor:pointer}
 .pl-eye{font-size:11px;opacity:.4;margin-right:4px}
 .pl-row-click:hover .pl-eye{opacity:1}
@@ -408,6 +410,7 @@ var dueContractType='all';               /* due tab: 'all' | 1 (yearly) | 2 (mon
 var dueTrackYear=null;                   /* due tab: special tracking year (default: prev year) */
 var dueActivePreset=null;                /* due tab: 1 | 2 | null — active preset for print title */
 var dueBuildings=null;                   /* due tab: Set of selected building codes (null = all) */
+var dueDateToAuto=true;                  /* due tab: end date follows the view mode until user sets it manually */
 var trackSubView='bld';                  /* bld | mon | det */
 var trackYearFrom=null,trackYearTo=null; /* year range for tracking */
 var trackDefaultsApplied=false;          /* force defaults on first tracking view per page load */
@@ -419,6 +422,12 @@ var plPreset='curYear';                  /* pl tab: all|curYear|prevYear|curMont
 var plInit=false;                        /* pl tab: apply default period once per page load */
 var plShowOth=false;                     /* pl tab: show loans/settlements items too (باقي البنود) */
 var plItems=null;                        /* pl tab: Set of visible item codes (null = all) */
+var dlFrom=null,dlTo=null;               /* dl tab (الحركات المفصلة): date range */
+var dlPreset='curYear';                  /* dl tab: quick preset */
+var dlInit=false;                        /* dl tab: apply default period once */
+var dlShowOth=false;                     /* dl tab: show loans/settlements too */
+var dlItems=null;                        /* dl tab: Set of visible item codes (null = all) */
+var dlShowLink=true;                     /* dl tab: show message link 🔗 in البيان (default on) */
 var itemsInfo={};                        /* Map: Item code → {nm,pay,grp} from 1106_Items */
 
 /* Status codes (from 1103_Status) */
@@ -500,6 +509,7 @@ function render(){
   else if(curView==='duePay')renderDuePay();
   else if(curView==='tracking')renderTracking();
   else if(curView==='pl')renderPL();
+  else if(curView==='dl')renderDL();
   setTimeout(enhanceAllTables,0);
 }
 
@@ -695,7 +705,7 @@ function updatePageSize(){
 /* ============ SHARED HEADER + TABS ============ */
 function renderHeaderTabs(pageTitle){
   var h='<div class="header no-print"><div class="header-inner"><div><h1>\u{1F4CA} مخطط إيجارات الشقق</h1><p>'+pageTitle+'</p></div><div class="header-btns"><button class="action-btn" onclick="shareApp()">\u{1F517} مشاركة</button><button class="action-btn" onclick="init()">\u{1F504} تحديث</button><button class="action-btn" onclick="window.print()">\u{1F5A8}\uFE0F طباعة</button></div></div></div>';
-  var tabs=[['gantt','\u{1F4CA}','مخطط جانت'],['matrix','\u{1F4CB}','عقود التأجير'],['due','\u{1F4B0}','متابعة المتحصلات'],['duePay','\u{1F4B8}','مبالغ للسداد'],['tracking','\u{1F4C8}','ملخص المتحصلات'],['pl','⚖️','الإيرادات والمصروفات']];
+  var tabs=[['gantt','\u{1F4CA}','مخطط جانت'],['matrix','\u{1F4CB}','عقود التأجير'],['due','\u{1F4B0}','متابعة المتحصلات'],['duePay','\u{1F4B8}','مبالغ للسداد'],['tracking','\u{1F4C8}','ملخص المتحصلات'],['pl','⚖️','الإيرادات والمصروفات'],['dl','📜','الحركات المفصلة']];
   h+='<div class="tabs-row no-print"><div class="tabs-inner">';
   tabs.forEach(function(t){h+='<button class="tab-btn'+(curView===t[0]?' active':'')+'" onclick="sV(\''+t[0]+'\')"><span class="tab-icon">'+t[1]+'</span> '+t[2]+'</button>';});
   h+='</div></div>';
@@ -957,7 +967,16 @@ function renderDue(){
   if(rows.length){
     var minDt=rows.reduce(function(m,r){return r.s.dt<m?r.s.dt:m;},rows[0].s.dt);
     if(dueDateFrom==null)dueDateFrom=new Date(minDt.getFullYear(),minDt.getMonth(),minDt.getDate());
-    if(dueDateTo==null){var td=new Date();dueDateTo=new Date(td.getFullYear(),td.getMonth(),td.getDate());}
+    /* End date default follows the mode: modes incl. مستحق/مسدد need future dues visible */
+    if(dueDateTo==null||dueDateToAuto){
+      var td=new Date();var base=new Date(td.getFullYear(),td.getMonth(),td.getDate());
+      if(dueMode===1){dueDateTo=new Date(base.getFullYear(),base.getMonth(),base.getDate()+APPROACHING_DAYS);}
+      else{
+        var maxDt=rows.reduce(function(m,r){return r.s.dt>m?r.s.dt:m;},rows[0].s.dt);
+        dueDateTo=new Date(maxDt.getFullYear(),maxDt.getMonth(),maxDt.getDate());
+        if(dueDateTo<base)dueDateTo=base;
+      }
+    }
   }
   var periodTxt=(dueDateFrom?fmtD(dueDateFrom):'البداية')+' — '+(dueDateTo?fmtD(dueDateTo):'الآن');
   var dueModeSub=(dueMode===1?'يعرض: غير مسدد، جزء غير مسدد، اقترب الميعاد (≤'+APPROACHING_DAYS+' يوم)':(dueMode===3?'يعرض: الدفعات المسددة بالكامل':(dueMode===4?'يعرض: جميع الدفعات (مسددة + مستحقة + غير مسددة + جزء + غيرها)':'يعرض: غير مسدد، جزء غير مسدد، اقترب الميعاد، مستحق')));
@@ -1148,6 +1167,7 @@ function sDReset(){
   dueGroupByBld=false;
   dueDateFrom=null;
   dueDateTo=null;
+  dueDateToAuto=true;
   dueBuildings=null;
   dueActivePreset=null;
   render();
@@ -1163,6 +1183,7 @@ function sDPreset(period){
     dueDateFrom=new Date(y,4,12);       // 12 May of y
     dueDateTo=new Date(y,10,11);        // 11 November of y
   }
+  dueDateToAuto=false;                  // preset dates are explicit — don't auto-extend
   dueMode=4;                            // الكل
   // Exclude building C
   var _rows=buildScheduleRows();
@@ -1229,7 +1250,7 @@ function makeDateInput(initialIso){
   return wrap;
 }
 function sDDF(s){if(!s){dueDateFrom=null;}else{var p=s.split("-");dueDateFrom=new Date(+p[0],+p[1]-1,+p[2]);}dueActivePreset=null;render();}
-function sDDT(s){if(!s){dueDateTo=null;}else{var p=s.split("-");dueDateTo=new Date(+p[0],+p[1]-1,+p[2]);}dueActivePreset=null;render();}
+function sDDT(s){if(!s){dueDateTo=null;dueDateToAuto=true;}else{var p=s.split("-");dueDateTo=new Date(+p[0],+p[1]-1,+p[2]);dueDateToAuto=false;}dueActivePreset=null;render();}
 function sGK(k){ganttKind=k;render();}
 
 /* ============ REPORT 2b: DUE PAYABLES (مبالغ للسداد) ============ */
@@ -1591,9 +1612,10 @@ function plQP(p){
 function sPLF(s){plPreset='custom';if(!s){plFrom=null;}else{var p=s.split("-");plFrom=new Date(+p[0],+p[1]-1,+p[2]);}render();}
 function sPLT(s){plPreset='custom';if(!s){plTo=null;}else{var p=s.split("-");plTo=new Date(+p[0],+p[1]-1,+p[2]);}render();}
 function sPLO(v){plShowOth=!!v;render();}
-function openPLItemFilter(anchorEl){
+function openPLItemFilter(anchorEl){openItemsFilter(anchorEl,plTxsInPeriod(),plItems,function(s){plItems=s;render();});}
+function openDLItemFilter(anchorEl){openItemsFilter(anchorEl,dlTxsInPeriod(),dlItems,function(s){dlItems=s;render();});}
+function openItemsFilter(anchorEl,txs,curSel,applyFn){
   closeFilterPopups();
-  var txs=plTxsInPeriod();
   var seen={};
   txs.forEach(function(t){seen[Number(t.it)]=true;});
   var codes=Object.keys(seen).map(Number).sort(function(a,b){return a-b;});
@@ -1609,7 +1631,7 @@ function openPLItemFilter(anchorEl){
     var txt=code+' — '+(inf?inf.nm:('بند '+code));
     var lbl=document.createElement('label');lbl.className='fpop-item';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=String(code);
-    cb.checked=!plItems||plItems.has(code);
+    cb.checked=!curSel||curSel.has(code);
     lbl.appendChild(cb);lbl.appendChild(document.createTextNode(' '+txt));
     listWrap.appendChild(lbl);
     itemCbs.push({cb:cb,lbl:lbl,val:txt.toLowerCase()});
@@ -1624,8 +1646,8 @@ function openPLItemFilter(anchorEl){
   var okBtn=document.createElement('button');okBtn.className='fpop-btn primary';okBtn.textContent='تطبيق';
   var clearBtn=document.createElement('button');clearBtn.className='fpop-btn';clearBtn.textContent='عرض الكل';
   var cancelBtn=document.createElement('button');cancelBtn.className='fpop-btn';cancelBtn.textContent='إلغاء';
-  okBtn.addEventListener('click',function(){var sel=new Set();itemCbs.forEach(function(x){if(x.cb.checked)sel.add(Number(x.cb.value));});if(sel.size===codes.length)plItems=null;else plItems=sel;closeFilterPopups();render();});
-  clearBtn.addEventListener('click',function(){plItems=null;closeFilterPopups();render();});
+  okBtn.addEventListener('click',function(){var sel=new Set();itemCbs.forEach(function(x){if(x.cb.checked)sel.add(Number(x.cb.value));});closeFilterPopups();applyFn(sel.size===codes.length?null:sel);});
+  clearBtn.addEventListener('click',function(){closeFilterPopups();applyFn(null);});
   cancelBtn.addEventListener('click',closeFilterPopups);
   bar.appendChild(okBtn);bar.appendChild(clearBtn);bar.appendChild(cancelBtn);pop.appendChild(bar);
   document.body.appendChild(pop);
@@ -1662,6 +1684,115 @@ function openPLDetails(code){
 }
 function closePLModal(){document.querySelectorAll('.pl-modal-overlay').forEach(function(el){el.remove();});}
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closePLModal();});
+
+/* ============ REPORT 5: DETAILED TRANSACTIONS — الحركات المفصلة ============ */
+function dlPeriodTxt(){return(dlFrom?fmtD(dlFrom):'البداية')+' — '+(dlTo?fmtD(dlTo):'اليوم');}
+function dlTxsInPeriod(){
+  var toEnd=dlTo?new Date(dlTo.getFullYear(),dlTo.getMonth(),dlTo.getDate(),23,59,59):null;
+  return allT.filter(function(t){if(!t.it)return false;if(dlFrom&&t.dt<dlFrom)return false;if(toEnd&&t.dt>toEnd)return false;return true;});
+}
+function renderDL(){
+  if(!dlInit){dlInit=true;var _n=new Date();dlFrom=new Date(_n.getFullYear(),0,1);dlTo=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate());dlPreset='curYear';}
+  var periodTxt=dlPeriodTxt();
+  var h=renderHeaderTabs('عرض الحركات المفصلة للإيرادات والمصروفات');
+  h+='<div class="header-print"><h1 class="hp-title">📜 الحركات المفصلة</h1><p class="hp-sub">عرض الحركات المفصلة للإيرادات والمصروفات</p><div class="hp-period">📅 الفترة المحددة: <span class="hp-period-val">'+periodTxt+'</span></div></div>';
+
+  var txsAll=dlTxsInPeriod();
+  var seen={};txsAll.forEach(function(t){seen[Number(t.it)]=true;});
+  var allItemCount=Object.keys(seen).length;
+
+  // Apply items filter + scope, compute totals
+  var list=[],totRev=0,totExp=0;
+  txsAll.forEach(function(t){
+    var code=Number(t.it);
+    if(dlItems&&!dlItems.has(code))return;
+    var pay=plItemPay(code);
+    if(pay!==1&&pay!==2&&!dlShowOth)return;
+    list.push({t:t,pay:pay,code:code});
+    if(pay===1)totRev+=t.am;else if(pay===2)totExp+=t.am;
+  });
+  list.sort(function(a,b){return a.t.dt-b.t.dt||a.t.sn-b.t.sn;});
+  var net=totRev-totExp;
+  var visSet={};list.forEach(function(r){visSet[r.code]=true;});
+  var shownItems=Object.keys(visSet).length;
+  var itemsLabel=dlItems?('📋 '+shownItems+' من '+allItemCount+' بند'):('📋 كل البنود ('+allItemCount+')');
+
+  h+='<div class="rpt-wrap"><div class="rpt-card">';
+  h+='<div class="rpt-head"><div><div class="rpt-title">📜 الحركات المفصلة</div><div class="rpt-sub">عرض الحركات المفصلة للإيرادات والمصروفات — قيمة المصروف بالسالب</div><div class="rpt-sub" style="margin-top:3px;font-weight:600">الفترة المحددة: '+periodTxt+'</div></div><button class="track-preset-btn no-print" onclick="window.print()">🖨️ طباعة التقرير</button></div>';
+
+  // Controls: quick presets + custom date range + scope + items filter
+  h+='<div class="rpt-ctrls no-print">';
+  h+='<div class="rpt-ctrl"><label>فترة سريعة</label><div class="seg-btns">';
+  PL_PRESETS.forEach(function(p){h+='<button class="seg-btn'+(dlPreset===p[0]?' active':'')+'" onclick="dlQP(\''+p[0]+'\')">'+p[1]+'</button>';});
+  h+='</div></div>';
+  h+='<div class="rpt-ctrl"><label>من تاريخ</label><span id="dlFromSlot"></span></div>';
+  h+='<div class="rpt-ctrl"><label>إلى تاريخ</label><span id="dlToSlot"></span></div>';
+  h+='<div style="flex-basis:100%;height:0;margin:0;padding:0"></div>';
+  h+='<div class="rpt-ctrl"><label>نطاق العرض</label><div class="seg-btns">';
+  h+='<button class="seg-btn'+(!dlShowOth?' active':'')+'" onclick="sDLO(false)">الإيرادات والمصروفات فقط</button>';
+  h+='<button class="seg-btn'+(dlShowOth?' active':'')+'" onclick="sDLO(true)">عرض باقي البنود أيضاً</button>';
+  h+='</div></div>';
+  h+='<div class="rpt-ctrl"><label>البنود المعروضة</label><button class="seg-btn'+(dlItems?' active':'')+'" onclick="openDLItemFilter(this)" style="min-width:150px">'+itemsLabel+' ▾</button></div>';
+  h+='<div class="rpt-ctrl"><label style="cursor:pointer"><input type="checkbox" onchange="sDLL(this.checked)"'+(dlShowLink?' checked':'')+' style="margin-left:6px;cursor:pointer"> إظهار رابط الرسالة 🔗</label></div>';
+  h+='</div>';
+
+  // Summary cards
+  h+='<div class="sum-row">';
+  h+='<div class="sum-card green"><div class="sum-val">'+fN(totRev)+'</div><div class="sum-lbl">إجمالي الإيرادات (ر.س)</div></div>';
+  h+='<div class="sum-card orange"><div class="sum-val">'+fN(totExp)+'</div><div class="sum-lbl">إجمالي المصروفات (ر.س)</div></div>';
+  h+='<div class="sum-card '+(net>=0?'green':'red')+'"><div class="sum-val">'+fN(net)+'</div><div class="sum-lbl">الفرق (الإيرادات − المصروفات)</div></div>';
+  h+='<div class="sum-card"><div class="sum-val">'+fN(list.length)+'</div><div class="sum-lbl">عدد الحركات المعروضة</div></div>';
+  h+='</div>';
+
+  // Detailed transactions table
+  if(!list.length){
+    h+='<div class="empty-state">لا توجد حركات في الفترة المحددة</div>';
+  }else{
+    h+='<div class="d-tbl-wrap"><table class="d-tbl"><thead><tr><th style="width:50px">م</th><th style="width:100px">التاريخ</th><th style="width:110px">نوع الحركة</th><th>البيان</th><th style="width:135px">القيمة (ر.س)</th></tr></thead><tbody>';
+    list.forEach(function(r,i){
+      var t=r.t;
+      var badge=r.pay===1?'<span class="st-badge st-2">إيراد</span>':(r.pay===2?'<span class="st-badge st-6">مصروف</span>':'<span class="st-badge st-4">قرض / تسوية</span>');
+      var val=r.pay===2?fN(-t.am):fN(t.am);
+      var valCls=r.pay===2?'money money-neg':(r.pay===1?'money money-paid':'money');
+      h+='<tr><td class="num">'+(i+1)+'</td><td class="num">'+fmtD(t.dt)+'</td><td>'+badge+'</td>';
+      h+='<td class="nm-cell">'+escHtml(t.nt||'-')+(dlShowLink&&t.lk?' <a href="'+escHtml(t.lk)+'" target="_blank" rel="noopener" title="فتح الرسالة" style="text-decoration:none">🔗</a>':'')+'</td>';
+      h+='<td class="'+valCls+'">'+val+'</td></tr>';
+    });
+    h+='</tbody><tfoot><tr><td colspan="4" style="text-align:left">الإجمالي (الإيرادات − المصروفات) — '+list.length+' حركة</td><td class="money '+(net>=0?'money-paid':'money-neg')+'">'+fN(net)+'</td></tr></tfoot></table></div>';
+  }
+
+  h+='</div></div>';
+  h+='<div class="footer">'+list.length+' حركة معروضة في الفترة ('+periodTxt+') | آخر تحديث: '+new Date().toLocaleDateString("ar-EG")+'</div>';
+  document.getElementById("app").innerHTML=h;
+
+  // Wire custom date inputs
+  var fromSlot=document.getElementById('dlFromSlot');
+  if(fromSlot){
+    var fromInp=makeDateInput(fmtDateInput(dlFrom));
+    fromInp.addEventListener('change',function(){sDLF(fromInp.value);});
+    fromSlot.appendChild(fromInp);
+  }
+  var toSlot=document.getElementById('dlToSlot');
+  if(toSlot){
+    var toInp=makeDateInput(fmtDateInput(dlTo));
+    toInp.addEventListener('change',function(){sDLT(toInp.value);});
+    toSlot.appendChild(toInp);
+  }
+}
+function dlQP(p){
+  dlPreset=p;
+  var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate());
+  if(p==='all'){var mn=null;allT.forEach(function(x){if(!mn||x.dt<mn)mn=x.dt;});dlFrom=mn?new Date(mn.getFullYear(),mn.getMonth(),mn.getDate()):new Date(t.getFullYear(),0,1);dlTo=t;}
+  else if(p==='curYear'){dlFrom=new Date(t.getFullYear(),0,1);dlTo=t;}
+  else if(p==='prevYear'){dlFrom=new Date(t.getFullYear()-1,0,1);dlTo=new Date(t.getFullYear()-1,11,31);}
+  else if(p==='curMonth'){dlFrom=new Date(t.getFullYear(),t.getMonth(),1);dlTo=t;}
+  else if(p==='prevMonth'){dlFrom=new Date(t.getFullYear(),t.getMonth()-1,1);dlTo=new Date(t.getFullYear(),t.getMonth(),0);}
+  render();
+}
+function sDLF(s){dlPreset='custom';if(!s){dlFrom=null;}else{var p=s.split("-");dlFrom=new Date(+p[0],+p[1]-1,+p[2]);}render();}
+function sDLT(s){dlPreset='custom';if(!s){dlTo=null;}else{var p=s.split("-");dlTo=new Date(+p[0],+p[1]-1,+p[2]);}render();}
+function sDLO(v){dlShowOth=!!v;render();}
+function sDLL(v){dlShowLink=!!v;render();}
 
 function sTFR(v){trackYearFrom=+v;if(trackYearFrom>trackYearTo)trackYearTo=trackYearFrom;render();}
 function sTTO(v){trackYearTo=+v;if(trackYearTo<trackYearFrom)trackYearFrom=trackYearTo;render();}
