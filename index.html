@@ -705,7 +705,7 @@ function updatePageSize(){
 /* ============ SHARED HEADER + TABS ============ */
 function renderHeaderTabs(pageTitle){
   var h='<div class="header no-print"><div class="header-inner"><div><h1>\u{1F4CA} مخطط إيجارات الشقق</h1><p>'+pageTitle+'</p></div><div class="header-btns"><button class="action-btn" onclick="shareApp()">\u{1F517} مشاركة</button><button class="action-btn" onclick="init()">\u{1F504} تحديث</button><button class="action-btn" onclick="window.print()">\u{1F5A8}\uFE0F طباعة</button></div></div></div>';
-  var tabs=[['gantt','\u{1F4CA}','مخطط جانت'],['matrix','\u{1F4CB}','عقود التأجير'],['due','\u{1F4B0}','متابعة المتحصلات'],['duePay','\u{1F4B8}','مبالغ للسداد'],['tracking','\u{1F4C8}','ملخص المتحصلات'],['pl','⚖️','الإيرادات والمصروفات'],['dl','📜','الحركات المفصلة']];
+  var tabs=[['gantt','\u{1F4CA}','مخطط جانت'],['matrix','\u{1F4CB}','عقود التأجير'],['due','\u{1F4B0}','الدفعات المستحقة'],['duePay','\u{1F4B8}','مبالغ للسداد'],['tracking','\u{1F4C8}','إجماليات التحصيل'],['pl','⚖️','الإيرادات والمصروفات'],['dl','📜','الحركات المفصلة']];
   h+='<div class="tabs-row no-print"><div class="tabs-inner">';
   tabs.forEach(function(t){h+='<button class="tab-btn'+(curView===t[0]?' active':'')+'" onclick="sV(\''+t[0]+'\')"><span class="tab-icon">'+t[1]+'</span> '+t[2]+'</button>';});
   h+='</div></div>';
@@ -960,7 +960,7 @@ function linkCell(url,label){if(url)return'<td class="no-print"><a href="'+escHt
 
 /* ============ REPORT 2: DUE PAYMENTS ============ */
 function renderDue(){
-  var h=renderHeaderTabs('متابعة المتحصلات');
+  var h=renderHeaderTabs('الدفعات المستحقة — متابعة التحصيل دفعة بدفعة');
 
   var rows=buildScheduleRows();
   // Initialize date range defaults: from earliest schedule date → to today
@@ -983,7 +983,7 @@ function renderDue(){
   var presetTitle='';
   if(dueActivePreset===1)presetTitle='<div class="hp-preset-title">📊 متحصلات قبل الدفعة الأولى</div>';
   else if(dueActivePreset===2)presetTitle='<div class="hp-preset-title">📊 متحصلات قبل الدفعة الثانية</div>';
-  h+='<div class="header-print"><h1 class="hp-title">\u{1F4B0} متابعة المتحصلات</h1><p class="hp-sub">'+dueModeSub+'</p>'+presetTitle+'<div class="hp-period">📅 الفترة المحددة: <span class="hp-period-val">'+periodTxt+'</span></div></div>';
+  h+='<div class="header-print"><h1 class="hp-title">\u{1F4B0} الدفعات المستحقة</h1><p class="hp-sub">'+dueModeSub+'</p>'+presetTitle+'<div class="hp-period">📅 الفترة المحددة: <span class="hp-period-val">'+periodTxt+'</span></div></div>';
   // Filter by mode
   var showStatuses;
   if(dueMode===1){showStatuses=[5,6,7,8];}        // exclude مستحق (4)
@@ -1003,7 +1003,7 @@ function renderDue(){
 
   // Build controls
   h+='<div class="rpt-wrap"><div class="rpt-card">';
-  h+='<div class="rpt-head"><div><div class="rpt-title">\u{1F4B0} متابعة المتحصلات</div><div class="rpt-sub">'+dueModeSub+'</div><div class="rpt-sub" style="margin-top:3px;font-weight:600">الفترة المحددة: '+periodTxt+'</div></div></div>';
+  h+='<div class="rpt-head"><div><div class="rpt-title">\u{1F4B0} الدفعات المستحقة</div><div class="rpt-sub">'+dueModeSub+'</div><div class="rpt-sub" style="margin-top:3px;font-weight:600">الفترة المحددة: '+periodTxt+'</div></div></div>';
 
   // Special tracking presets (yearly rentals — 2 periods per year)
   if(dueTrackYear==null)dueTrackYear=new Date().getFullYear()-1;
@@ -1312,8 +1312,8 @@ function renderDuePay(){
 
 /* ============ REPORT 3: COLLECTIONS TRACKING ============ */
 function renderTracking(){
-  var h=renderHeaderTabs('متابعة المتحصلات — ملخص بالعمارة والشهور والتفصيلي');
-  h+='<div class="header-print"><h1 class="hp-title">\u{1F4C8} متابعة المتحصلات</h1><p class="hp-sub">الفترة: '+trackYearFrom+' — '+trackYearTo+'</p></div>';
+  var h=renderHeaderTabs('إجماليات التحصيل — بالعمارة والشهور والتفصيلي');
+  h+='<div class="header-print"><h1 class="hp-title">\u{1F4C8} إجماليات التحصيل</h1><p class="hp-sub">الفترة: '+trackYearFrom+' — '+trackYearTo+'</p></div>';
 
   var allYrs=getAllYears();
   if(!allYrs.length){document.getElementById("app").innerHTML=h+'<div class="rpt-wrap"><div class="rpt-card"><div class="empty-state">لا توجد بيانات</div></div></div>';return;}
@@ -1361,7 +1361,7 @@ function renderTracking(){
   Object.keys(bldSum).forEach(function(k){gColl+=bldSum[k].coll;gPend+=bldSum[k].pend;});
 
   h+='<div class="rpt-wrap"><div class="rpt-card">';
-  h+='<div class="rpt-head"><div><div class="rpt-title">\u{1F4C8} متابعة المتحصلات</div><div class="rpt-sub">تجميع المتحصلات والمبالغ المعلقة حسب الفترة المحددة</div></div></div>';
+  h+='<div class="rpt-head"><div><div class="rpt-title">\u{1F4C8} إجماليات التحصيل</div><div class="rpt-sub">تجميع المتحصلات والمبالغ المعلقة حسب الفترة المحددة</div></div></div>';
 
   // Controls: year range + subview
   h+='<div class="rpt-ctrls">';
