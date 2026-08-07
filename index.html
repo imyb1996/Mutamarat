@@ -983,7 +983,9 @@ function renderDue(){
   var presetTitle='';
   if(dueActivePreset===1)presetTitle='<div class="hp-preset-title">📊 متحصلات قبل الدفعة الأولى</div>';
   else if(dueActivePreset===2)presetTitle='<div class="hp-preset-title">📊 متحصلات قبل الدفعة الثانية</div>';
-  h+='<div class="header-print"><h1 class="hp-title">\u{1F4B0} الدفعات المستحقة</h1><p class="hp-sub">'+dueModeSub+'</p>'+presetTitle+'<div class="hp-period">📅 الفترة المحددة: <span class="hp-period-val">'+periodTxt+'</span></div></div>';
+  /* Print period: default = حتى تاريخ اليوم; with special tracking preset = full period */
+  var printPeriod=dueActivePreset?('📅 الفترة المحددة: <span class="hp-period-val">'+periodTxt+'</span>'):('📅 حتى تاريخ اليوم: <span class="hp-period-val">'+fmtD(new Date())+'</span>');
+  h+='<div class="header-print"><h1 class="hp-title">\u{1F4B0} الدفعات المستحقة</h1><p class="hp-sub">'+dueModeSub+'</p>'+presetTitle+'<div class="hp-period">'+printPeriod+'</div></div>';
   // Filter by mode
   var showStatuses;
   if(dueMode===1){showStatuses=[5,6,7,8];}        // exclude مستحق (4)
