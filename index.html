@@ -744,6 +744,31 @@ function updatePageSize(){
   s.textContent=css;
 }
 
+/* ============ PDF FILENAME ON PRINT ============ */
+/* عند الطباعة/الحفظ كـ PDF يُستخدم document.title كاسم للملف: "التاريخ اسم التقرير" */
+var BASE_TITLE=document.title;
+function printTitle(){
+  var n=new Date();
+  var ds=n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();
+  var nm;
+  if(curView==='matrix')nm='تجميع عقود التأجير للغير';
+  else if(curView==='due')nm='الدفعات المستحقة';
+  else if(curView==='duePay')nm='مبالغ للسداد';
+  else if(curView==='tracking')nm='إجماليات التحصيل';
+  else if(curView==='pl')nm='الإيرادات والمصروفات';
+  else if(curView==='dl')nm='الحركات المفصلة';
+  else if(curView==='util'){
+    if(utilType===2301)nm='ملخص سداد فواتير الكهرباء';
+    else if(utilType===2302)nm='ملخص سداد فواتير المياه';
+    else if(utilType===2310)nm='ملخص سداد فواتير الإنترنت';
+    else nm='ملخص سداد فواتير المرافق';
+  }
+  else nm='مخطط إيجارات الشقق';
+  return ds+' '+nm;
+}
+window.addEventListener('beforeprint',function(){document.title=printTitle();});
+window.addEventListener('afterprint',function(){document.title=BASE_TITLE;});
+
 /* ============ SHARED HEADER + TABS ============ */
 function renderHeaderTabs(pageTitle){
   var h='<div class="header no-print"><div class="header-inner"><div><h1>\u{1F4CA} مخطط إيجارات الشقق</h1><p>'+pageTitle+'</p></div><div class="header-btns"><button class="action-btn" onclick="shareApp()">\u{1F517} مشاركة</button><button class="action-btn" onclick="init()">\u{1F504} تحديث</button><button class="action-btn" onclick="window.print()">\u{1F5A8}\uFE0F طباعة</button></div></div></div>';
