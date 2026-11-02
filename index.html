@@ -348,6 +348,41 @@ body{font-family:'Tajawal',sans-serif;background:linear-gradient(135deg,var(--bg
 .pl-modal-body .d-tbl thead th{position:sticky;top:0;z-index:2}
 @media print{.pl-modal-overlay{display:none!important}}
 
+/* ============ UTILITIES BILLS MATRIX (فواتير المرافق) ============ */
+.u-tbl{width:100%;border-collapse:collapse;font-size:12px;min-width:980px}
+.u-tbl thead th{background:var(--navy);color:#fff;padding:8px 3px;text-align:center;font-weight:700;font-size:12px;border-left:1px solid rgba(255,255,255,.15);position:sticky;top:48px;z-index:3}
+.u-tbl thead th .en{display:block;font-size:9px;font-weight:400;opacity:.75}
+.u-tbl thead th.u-apt{z-index:5}
+.u-tbl tbody td{border-bottom:1px solid var(--border-light);border-left:1px solid var(--border-light);padding:4px 3px;text-align:center;vertical-align:middle;height:34px}
+.u-tbl td.u-apt,.u-tbl th.u-apt{position:sticky;right:0;min-width:92px;box-shadow:-2px 0 4px rgba(0,0,0,.05)}
+.u-tbl tbody td.u-apt{background:var(--header-bg);z-index:2;border-left:var(--grid-width) solid var(--grid-color)}
+.u-tbl tbody tr.u-svc-row td.u-apt{background:#E0E7FF}
+.u-svc-lbl{display:block;font-size:9px;color:var(--text-mid);margin-top:2px;font-weight:600}
+.u-cell{font-variant-numeric:tabular-nums;direction:ltr;font-weight:700;font-size:11.5px}
+td.u-paid{background:#D1FADF;color:#027A48;cursor:pointer}
+td.u-paid:hover{background:#A7F3C5}
+td.u-due{background:#FEE4E2;color:#B42318;font-size:13px;font-weight:800}
+td.u-vac{background:#FEF0C7;color:#B54708;font-size:13px;font-weight:800}
+td.u-tot{background:var(--header-bg);font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;direction:ltr}
+.u-tbl td.u-bhead{background:#CBD5E0;color:var(--navy);font-weight:800;text-align:right;padding:6px 14px;font-size:13px}
+.u-tbl tfoot td{background:var(--navy);color:#fff;font-weight:800;padding:8px 3px;text-align:center;font-variant-numeric:tabular-nums;direction:ltr;border-left:1px solid rgba(255,255,255,.15);font-size:11.5px}
+.u-tbl tfoot td.u-apt{background:var(--navy);z-index:2;direction:rtl}
+.u-legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:10px 22px;background:var(--row-alt);border-bottom:1px solid var(--border-light);font-size:12px;color:var(--text-mid)}
+.u-leg-sw{display:inline-block;min-width:30px;height:17px;border-radius:4px;border:1px solid rgba(0,0,0,.12);text-align:center;font-size:10px;line-height:16px;font-weight:800;padding:0 3px;font-variant-numeric:tabular-nums;direction:ltr}
+.u-hint{padding:8px 22px;background:#FFF8E1;border-bottom:1px solid #FDE68A;font-size:11.5px;color:#92400E}
+@media print{
+  .u-tbl{min-width:0;font-size:9px}
+  .u-tbl thead th{position:static!important;background:#2B4C7E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .u-tbl td.u-apt,.u-tbl th.u-apt{position:static!important;box-shadow:none}
+  td.u-paid{background:#D1FADF!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  td.u-due{background:#FEE4E2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  td.u-vac{background:#FEF0C7!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .u-tbl tbody tr.u-svc-row td.u-apt{background:#E0E7FF!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .u-tbl td.u-bhead{background:#CBD5E0!important;color:#1A365D!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .u-tbl tfoot td{background:#2B4C7E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .u-tbl tbody td{padding:3px 2px;height:auto}
+}
+
 /* ============ PRINT ============ */
 @media print{
   .rpt-wrap{max-width:none;padding:0;margin:0}
@@ -429,6 +464,12 @@ var dlShowOth=false;                     /* dl tab: show loans/settlements too *
 var dlItems=null;                        /* dl tab: Set of visible item codes (null = all) */
 var dlShowLink=true;                     /* dl tab: show message link 🔗 in البيان (default on) */
 var itemsInfo={};                        /* Map: Item code → {nm,pay,grp} from 1106_Items */
+var UTIL_DEFS=[[2301,'كهرباء','⚡'],[2302,'مياه','\u{1F4A7}'],[2310,'الإنترنت','\u{1F310}']];
+var utilYear=null;                       /* util tab: selected year */
+var utilType='all';                      /* util tab: 'all' | 2301 | 2302 | 2310 */
+var utilBld='all';                       /* util tab: building filter */
+var utilOnlyData=false;                  /* util tab: hide apartment rows without transactions */
+var _utilCells={};                       /* util tab: "code|month" → tx list for details modal */
 
 /* Status codes (from 1103_Status) */
 var ST_NAMES={1:'لاغي',2:'تم السداد',3:'سداد بزيادة',4:'مستحق',5:'سداد جزء',6:'غير مسدد بالكامل',7:'جزء غير مسدد',8:'اقترب الميعاد'};
@@ -507,6 +548,7 @@ function render(){
   else if(curView==='matrix')renderMatrix();
   else if(curView==='due')renderDue();
   else if(curView==='duePay')renderDuePay();
+  else if(curView==='util')renderUtil();
   else if(curView==='tracking')renderTracking();
   else if(curView==='pl')renderPL();
   else if(curView==='dl')renderDL();
@@ -697,7 +739,7 @@ function updatePageSize(){
   var s=document.getElementById('dynPageStyle');
   if(!s){s=document.createElement('style');s.id='dynPageStyle';document.head.appendChild(s);}
   var css;
-  if(curView==='gantt'){css='@media print{@page{size:A4 landscape;margin:8mm}}';}
+  if(curView==='gantt'||curView==='util'){css='@media print{@page{size:A4 landscape;margin:8mm}}';}
   else{css='@media print{@page{size:A4 portrait;margin:12mm 10mm}}';}
   s.textContent=css;
 }
@@ -705,7 +747,7 @@ function updatePageSize(){
 /* ============ SHARED HEADER + TABS ============ */
 function renderHeaderTabs(pageTitle){
   var h='<div class="header no-print"><div class="header-inner"><div><h1>\u{1F4CA} مخطط إيجارات الشقق</h1><p>'+pageTitle+'</p></div><div class="header-btns"><button class="action-btn" onclick="shareApp()">\u{1F517} مشاركة</button><button class="action-btn" onclick="init()">\u{1F504} تحديث</button><button class="action-btn" onclick="window.print()">\u{1F5A8}\uFE0F طباعة</button></div></div></div>';
-  var tabs=[['gantt','\u{1F4CA}','مخطط جانت'],['matrix','\u{1F4CB}','عقود التأجير'],['due','\u{1F4B0}','الدفعات المستحقة'],['duePay','\u{1F4B8}','مبالغ للسداد'],['tracking','\u{1F4C8}','إجماليات التحصيل'],['pl','⚖️','الإيرادات والمصروفات'],['dl','📜','الحركات المفصلة']];
+  var tabs=[['gantt','\u{1F4CA}','مخطط جانت'],['matrix','\u{1F4CB}','عقود التأجير'],['due','\u{1F4B0}','الدفعات المستحقة'],['duePay','\u{1F4B8}','مبالغ للسداد'],['util','⚡','فواتير المرافق'],['tracking','\u{1F4C8}','إجماليات التحصيل'],['pl','⚖️','الإيرادات والمصروفات'],['dl','📜','الحركات المفصلة']];
   h+='<div class="tabs-row no-print"><div class="tabs-inner">';
   tabs.forEach(function(t){h+='<button class="tab-btn'+(curView===t[0]?' active':'')+'" onclick="sV(\''+t[0]+'\')"><span class="tab-icon">'+t[1]+'</span> '+t[2]+'</button>';});
   h+='</div></div>';
@@ -1310,6 +1352,181 @@ function renderDuePay(){
   h+='</div></div>';
   h+='<div class="footer">'+filtered.length+' دفعة مطلوبة السداد | آخر تحديث: '+new Date().toLocaleDateString("ar-EG")+'</div>';
   document.getElementById("app").innerHTML=h;
+}
+
+/* ============ REPORT 2c: UTILITIES BILLS MATRIX — فواتير المرافق ============ */
+function getUtilDefMap(){var m={};UTIL_DEFS.forEach(function(u){m[u[0]]={nm:u[1],ic:u[2]};});return m;}
+function getUtilYears(){var um=getUtilDefMap();var s=new Set();allT.forEach(function(t){if(um[Number(t.it)])s.add(t.dt.getFullYear());});s.add(new Date().getFullYear());return Array.from(s).sort(function(a,b){return a-b;});}
+/* Map a utility transaction to a row code: apartment (مثل C03)، خدمات العمارة (X00)، أو "؟" غير مرتبط */
+function utilTxCode(t){if(t.bl){if(t.ap!=null&&t.ap!==''&&Number(t.ap)!==0)return mkAc(t.ap,t.bl);return t.bl+'00';}return '؟';}
+function renderUtil(){
+  var UT=getUtilDefMap();
+  var now=new Date();
+  var yrs=getUtilYears();
+  if(utilYear==null||yrs.indexOf(utilYear)<0)utilYear=yrs.indexOf(now.getFullYear())>=0?now.getFullYear():yrs[yrs.length-1];
+
+  var utxAll=allT.filter(function(t){return UT[Number(t.it)];});
+  /* Buildings: from contracts + utility transactions */
+  var bset=new Set();
+  allC.forEach(function(c){if(c.bc&&c.bc!=="0")bset.add(c.bc);});
+  utxAll.forEach(function(t){if(t.bl)bset.add(t.bl);});
+  var blds=Array.from(bset).sort();
+  if(utilBld!=='all'&&blds.indexOf(utilBld)<0)utilBld='all';
+  /* Apartment rows shown only for الكل/كهرباء — المياه والإنترنت فواتيرها على مستوى العمارة */
+  var showApts=(utilType==='all'||utilType===2301);
+
+  /* Transactions of selected year + type */
+  var utx=utxAll.filter(function(t){if(t.dt.getFullYear()!==utilYear)return false;if(utilType!=='all'&&Number(t.it)!==utilType)return false;return true;});
+  _utilCells={};
+  var cellSum={},rowHasTx={},unCnt=0;
+  utx.forEach(function(t){
+    var code=utilTxCode(t),m=t.dt.getMonth(),key=code+'|'+m;
+    if(!_utilCells[key])_utilCells[key]=[];
+    _utilCells[key].push(t);
+    cellSum[key]=(cellSum[key]||0)+t.am;
+    rowHasTx[code]=true;
+    if(!t.bl)unCnt++;
+  });
+
+  /* Apartment codes per building: from income contracts + utility transactions */
+  var aptsByBld={};
+  allC.forEach(function(c){if(c.kind!=='income'||!c.bc||c.bc==="0")return;if(!aptsByBld[c.bc])aptsByBld[c.bc]=new Set();aptsByBld[c.bc].add(c.ac);});
+  utx.forEach(function(t){if(!t.bl)return;if(!aptsByBld[t.bl])aptsByBld[t.bl]=new Set();aptsByBld[t.bl].add(utilTxCode(t));});
+
+  /* Occupancy from income contracts (يشمل عقد العمارة الكاملة X00) */
+  var mS=[],mE=[];for(var i=0;i<12;i++){mS.push(new Date(utilYear,i,1));mE.push(new Date(utilYear,i+1,0,23,59,59));}
+  var incC=allC.filter(function(c){return c.kind==='income';});
+  function occCode(code,m){for(var i=0;i<incC.length;i++){var c=incC[i];if(c.ac===code&&c.sd<=mE[m]&&c.de>=mS[m])return true;}return false;}
+  function occBld(b,m){for(var i=0;i<incC.length;i++){var c=incC[i];if(c.bc===b&&c.sd<=mE[m]&&c.de>=mS[m])return true;}return false;}
+  function isPast(m){return utilYear<now.getFullYear()||(utilYear===now.getFullYear()&&m<now.getMonth());}
+
+  /* Rows: per building → خدمات العمارة أولاً ثم الشقق */
+  var rows=[];
+  blds.forEach(function(b){
+    if(utilBld!=='all'&&b!==utilBld)return;
+    var svcCode=b+'00';
+    rows.push({code:svcCode,b:b,svc:true});
+    if(showApts){
+      var apts=Array.from(aptsByBld[b]||[]).filter(function(c){return c!==svcCode;}).sort(sortCode);
+      apts.forEach(function(code){if(utilOnlyData&&!rowHasTx[code])return;rows.push({code:code,b:b,svc:false});});
+    }
+  });
+  if(utilBld==='all'&&rowHasTx['؟'])rows.push({code:'؟',b:'',svc:false,un:true});
+
+  /* Build table body + totals */
+  var monTot=[0,0,0,0,0,0,0,0,0,0,0,0],grand=0,dueCnt=0,vacCnt=0,shownTx=0;
+  var body='',curHdr='';
+  rows.forEach(function(r){
+    if(utilBld==='all'){
+      var hdr=r.un?'غير مرتبط بعمارة أو شقة':'العمارة '+r.b;
+      if(hdr!==curHdr){curHdr=hdr;body+='<tr><td colspan="14" class="u-bhead">\u{1F3E2} '+escHtml(hdr)+'</td></tr>';}
+    }
+    var rowTot=0,cells='';
+    for(var m=0;m<12;m++){
+      var key=r.code+'|'+m,txs=_utilCells[key];
+      if(txs&&txs.length){
+        var sum=cellSum[key];rowTot+=sum;monTot[m]+=sum;grand+=sum;shownTx+=txs.length;
+        var byIt={},tip=[];
+        txs.forEach(function(t){var k=Number(t.it);byIt[k]=(byIt[k]||0)+t.am;});
+        Object.keys(byIt).forEach(function(k){tip.push(UT[k].nm+': '+fN(byIt[k]));});
+        cells+='<td class="u-cell u-paid" title="'+tip.join(' • ')+' — انقر للتفاصيل" onclick="openUtilCell(\''+r.code+'\','+m+')">'+fN(sum)+'</td>';
+      }else if(isPast(m)&&!r.un){
+        var occ=r.svc?occBld(r.b,m):occCode(r.code,m);
+        if(occ){dueCnt++;cells+='<td class="u-cell u-due" title="غير مسدد — '+(r.svc?'العمارة بها مستأجرون':'الشقة مؤجرة')+'">✗</td>';}
+        else{vacCnt++;cells+='<td class="u-cell u-vac" title="غير مسدد — '+(r.svc?'لا يوجد مستأجرون في العمارة':'الشقة فارغة')+'">○</td>';}
+      }else{
+        cells+='<td class="u-cell"></td>';
+      }
+    }
+    var lbl;
+    if(r.un)lbl='<span class="apt-badge empty">؟</span><span class="u-svc-lbl">غير مرتبط</span>';
+    else{lbl='<span class="apt-badge">'+escHtml(r.code)+'</span>';if(r.svc)lbl+='<span class="u-svc-lbl">خدمات العمارة</span>';}
+    body+='<tr'+(r.svc?' class="u-svc-row"':'')+'><td class="u-apt">'+lbl+'</td>'+cells+'<td class="u-tot">'+(rowTot?fN(rowTot):'–')+'</td></tr>';
+  });
+
+  /* Assemble page */
+  var yIdx=yrs.indexOf(utilYear),hasPrev=yIdx>0,hasNext=yIdx<yrs.length-1;
+  var typeNm=utilType==='all'?'الكهرباء والمياه والإنترنت':UT[utilType].nm;
+  var h=renderHeaderTabs('متابعة سداد فواتير الكهرباء والمياه والإنترنت شهرياً');
+  h+='<div class="header-print"><h1 class="hp-title">⚡ فواتير المرافق</h1><p class="hp-sub">'+typeNm+' — حسب الشقة والشهر</p><div class="hp-year">'+utilYear+'</div></div>';
+  h+='<div class="rpt-wrap"><div class="rpt-card">';
+  h+='<div class="rpt-head"><div><div class="rpt-title">⚡ فواتير المرافق</div><div class="rpt-sub">متابعة سداد فواتير الكهرباء والمياه والإنترنت — الصفوف: الشقق وخدمات كل عمارة، والأعمدة: شهور سنة '+utilYear+'</div></div><button class="track-preset-btn no-print" onclick="window.print()">\u{1F5A8}️ طباعة</button></div>';
+
+  /* Controls */
+  h+='<div class="rpt-ctrls no-print">';
+  h+='<div class="rpt-ctrl"><label>السنة</label><div class="year-sel"><button class="year-arrow" onclick="chUY(-1)"'+(hasPrev?'':' disabled style="opacity:.4;cursor:default"')+'>▶</button><select onchange="sUY(+this.value)">';
+  yrs.forEach(function(y){h+='<option value="'+y+'"'+(y===utilYear?' selected':'')+'>'+y+'</option>';});
+  h+='</select><button class="year-arrow" onclick="chUY(1)"'+(hasNext?'':' disabled style="opacity:.4;cursor:default"')+'>◀</button></div></div>';
+  h+='<div class="rpt-ctrl"><label>نوع الفاتورة</label><div class="seg-btns">';
+  h+='<button class="seg-btn'+(utilType==='all'?' active':'')+'" onclick="sUT(\'all\')">الكل</button>';
+  UTIL_DEFS.forEach(function(u){h+='<button class="seg-btn'+(utilType===u[0]?' active':'')+'" onclick="sUT('+u[0]+')">'+u[2]+' '+u[1]+'</button>';});
+  h+='</div></div>';
+  h+='<div class="rpt-ctrl"><label>المبنى</label><select class="bld-select" onchange="sUB(this.value)"><option value="all"'+(utilBld==='all'?' selected':'')+'>جميع المباني</option>';
+  blds.forEach(function(b){h+='<option value="'+b+'"'+(b===utilBld?' selected':'')+'>المبنى '+b+'</option>';});
+  h+='</select></div>';
+  if(showApts)h+='<div class="rpt-ctrl"><label style="cursor:pointer;padding-top:18px"><input type="checkbox" onchange="sUO(this.checked)"'+(utilOnlyData?' checked':'')+' style="margin-left:6px;cursor:pointer"> إخفاء الشقق التي ليس بها حركات</label></div>';
+  h+='</div>';
+
+  /* Legend */
+  h+='<div class="u-legend"><span style="font-weight:700;color:var(--text-mid)">دليل الألوان:</span>';
+  h+='<span class="legend-item"><span class="u-leg-sw" style="background:#D1FADF;color:#027A48">1,250</span> تم السداد (القيمة)</span>';
+  h+='<span class="legend-item"><span class="u-leg-sw" style="background:#FEE4E2;color:#B42318">✗</span> غير مسدد — بها مستأجر</span>';
+  h+='<span class="legend-item"><span class="u-leg-sw" style="background:#FEF0C7;color:#B54708">○</span> غير مسدد — فارغة</span>';
+  h+='<span class="legend-item" style="color:var(--text-muted)">الشهر الحالي والمستقبلي يبقى بدون علامة</span></div>';
+  if(unCnt)h+='<div class="u-hint no-print">⚠️ يوجد '+unCnt+' حركة في '+utilYear+' غير مرتبطة بعمارة أو شقة (عمودا Ap_Number2 و Bul_Code2 فارغان في شيت الحركات) — تظهر في صف "غير مرتبط" أسفل الجدول</div>';
+
+  /* Summary cards */
+  h+='<div class="sum-row">';
+  h+='<div class="sum-card green"><div class="sum-val">'+fN(grand)+'</div><div class="sum-lbl">إجمالي المسدد في '+utilYear+' (ر.س)</div></div>';
+  h+='<div class="sum-card"><div class="sum-val">'+shownTx+'</div><div class="sum-lbl">عدد الحركات المعروضة</div></div>';
+  h+='<div class="sum-card red"><div class="sum-val">'+dueCnt+'</div><div class="sum-lbl">شهر غير مسدد — وحدات بها مستأجر</div></div>';
+  h+='<div class="sum-card orange"><div class="sum-val">'+vacCnt+'</div><div class="sum-lbl">شهر غير مسدد — وحدات فارغة</div></div>';
+  h+='</div>';
+
+  /* Matrix table */
+  h+='<div class="d-tbl-wrap"><table class="u-tbl"><thead><tr><th class="u-apt">الشقة</th>';
+  for(var mh=0;mh<12;mh++)h+='<th>'+MA[mh]+'<span class="en">'+ME[mh]+'</span></th>';
+  h+='<th style="min-width:84px">الإجمالي</th></tr></thead><tbody>';
+  h+=rows.length?body:'<tr><td colspan="14"><div class="empty-state">لا توجد بيانات للعرض</div></td></tr>';
+  h+='</tbody><tfoot><tr><td class="u-apt">الإجمالي</td>';
+  for(var mf=0;mf<12;mf++)h+='<td>'+(monTot[mf]?fN(monTot[mf]):'–')+'</td>';
+  h+='<td>'+(grand?fN(grand):'–')+'</td></tr></tfoot></table></div>';
+
+  h+='</div></div>';
+  h+='<div class="footer">'+shownTx+' حركة مرافق في '+utilYear+' | آخر تحديث: '+new Date().toLocaleDateString("ar-EG")+'</div>';
+  document.getElementById("app").innerHTML=h;
+}
+function sUY(y){utilYear=+y;render();}
+function chUY(d){var yrs=getUtilYears(),i=yrs.indexOf(utilYear);utilYear=yrs[Math.max(0,Math.min(yrs.length-1,i+d))]||utilYear;render();}
+function sUT(t){utilType=(t==='all')?'all':+t;render();}
+function sUB(b){utilBld=b;render();}
+function sUO(v){utilOnlyData=!!v;render();}
+/* Cell details modal (يعيد استخدام أنماط pl-modal) */
+function openUtilCell(code,m){
+  closePLModal();
+  var UT=getUtilDefMap();
+  var key=code+'|'+m,txs=(_utilCells[key]||[]).slice();
+  txs.sort(function(a,b){return a.dt-b.dt||a.sn-b.sn;});
+  var tot=0;txs.forEach(function(t){tot+=t.am;});
+  var rowsH='';
+  txs.forEach(function(t,i){
+    var u=UT[Number(t.it)]||{nm:t.it,ic:''};
+    rowsH+='<tr><td class="num">'+(i+1)+'</td><td class="num">'+fmtD(t.dt)+'</td><td>'+u.ic+' '+escHtml(u.nm)+'</td>';
+    rowsH+='<td class="nm-cell">'+escHtml(t.nt||'-')+(t.lk?' <a href="'+escHtml(t.lk)+'" target="_blank" rel="noopener" title="فتح المرفق" style="text-decoration:none">\u{1F517}</a>':'')+'</td>';
+    rowsH+='<td class="money">'+fN(t.am)+'</td></tr>';
+  });
+  var bodyH;
+  if(!txs.length){bodyH='<div class="empty-state">لا توجد حركات</div>';}
+  else{bodyH='<div class="d-tbl-wrap"><table class="d-tbl"><thead><tr><th style="width:40px">م</th><th style="width:95px">التاريخ</th><th style="width:100px">النوع</th><th>البيان</th><th style="width:110px">المبلغ (ر.س)</th></tr></thead><tbody>'+rowsH+'</tbody><tfoot><tr><td colspan="4" style="text-align:left">الإجمالي — '+txs.length+' حركة</td><td class="money">'+fN(tot)+'</td></tr></tfoot></table></div>';}
+  var lbl=/^[A-Za-z]+00$/.test(code)?('خدمات العمارة '+code.replace(/00$/,'')):(code==='؟'?'غير مرتبط بعمارة':'الشقة '+code);
+  var ov=document.createElement('div');
+  ov.className='pl-modal-overlay no-print';
+  ov.addEventListener('click',function(e){if(e.target===ov)closePLModal();});
+  var md=document.createElement('div');
+  md.className='pl-modal';
+  md.innerHTML='<div class="pl-modal-head"><div><div class="pl-modal-title">⚡ '+escHtml(lbl)+' <span class="code-chip">'+MA[m]+' '+utilYear+'</span></div><div class="pl-modal-sub">فواتير المرافق المسددة خلال الشهر</div></div><div style="display:flex;align-items:center;gap:10px"><span class="pl-modal-total">'+fN(tot)+' ر.س</span><button class="pl-modal-close" onclick="closePLModal()" title="إغلاق">✕</button></div></div><div class="pl-modal-body">'+bodyH+'</div>';
+  ov.appendChild(md);
+  document.body.appendChild(ov);
 }
 
 /* ============ REPORT 3: COLLECTIONS TRACKING ============ */
